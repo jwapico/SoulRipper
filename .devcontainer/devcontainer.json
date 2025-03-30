@@ -10,7 +10,8 @@
                 "ms-python.python",
                 "github.copilot",
                 "github.copilot-chat",
-                "albert.tabout"
+                "albert.tabout",
+                "ms-azuretools.vscode-docker"
             ],
 			"settings": {
 				"terminal.integrated.defaultProfile.linux": "bash"
