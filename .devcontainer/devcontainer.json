@@ -1,0 +1,20 @@
+{
+    "name": "SoulRipper Dev Container",
+    "dockerComposeFile": "../docker-compose.yml",
+    "service": "soulripper",
+    "workspaceFolder": "/home/soulripper/",
+    "shutdownAction": "stopCompose",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-python.python",
+                "github.copilot",
+                "github.copilot-chat",
+                "albert.tabout"
+            ],
+			"settings": {
+				"terminal.integrated.defaultProfile.linux": "bash"
+			}
+        }
+    },
+}
