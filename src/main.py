@@ -7,6 +7,7 @@ import json
 import argparse
 import dotenv
 import spotify_utils
+import shutil
 
 dotenv.load_dotenv()
 slskd_api_key = os.getenv("SLSKD_API_KEY")
@@ -84,51 +85,30 @@ def download_track_slskd(search_query: str, output_path: str) -> str:
         if len(new_download["directories"]) > 1 or len(new_download["directories"][0]["files"]) > 1:
             raise Exception(f"bug: more than one file candidate in new_download: \n\n{pprint(new_download)}")
 
-        new_download_id = new_download["directories"][0]["files"][0]["id"]
+        directory = new_download["directories"][0]
+        file = directory["files"][0]
+        download_id = file["id"]
 
         # wait for the download to be completed
-        new_download_state = slskd.transfers.get_download(highest_quality_file_user, new_download_id)["state"]
+        new_download_state = slskd.transfers.get_download(highest_quality_file_user, download_id)["state"]
         while not "Completed" in new_download_state:
             print(new_download_state)
             time.sleep(1)
-            new_download_state = slskd.transfers.get_download(highest_quality_file_user, new_download_id)["state"]
+            new_download_state = slskd.transfers.get_download(highest_quality_file_user, download_id)["state"]
 
-        # TODO: extract what the output path would be in the assets/downloads folder - look at new_download["directories"] i think it just copies the containing dir of the file
         # TODO: if the download failed, retry from a different user, maybe next highest quality file. how many retries should we do before giving up?
         print(new_download_state)
-        pprint(slskd.transfers.get_download(highest_quality_file_user, new_download_id))
-        return "deez nuts"
 
-def select_best_search_candidate(search_results):
-    """
-    Returns the search result with the highest quality flac or mp3 file.
+        # this moves the file from where it was downloaded to the specified output path
+        if new_download_state == "Completed, Succeeded":
+            containing_dir_name = os.path.basename(directory["directory"].replace("\\", "/"))
+            filename = os.path.basename(file["filename"].replace("\\", "/"))
 
-    Args:
-        search_results: search responses in the format of slskd.searches.search_responses()
-    
-    Returns:
-        (highest_quality_file, highest_quality_file_user: str): The file data for the best candidate, and the username of its owner
-    """
+            source_path = os.path.join(f"assets/downloads/{containing_dir_name}/{filename}")
+            dest_path = os.path.join(f"{output_path}/{filename}")
+            shutil.move(source_path, dest_path)
 
-    relevant_results = []
-    highest_quality_file = {"size": 0}
-    highest_quality_file_user = ""
-
-    for result in search_results:
-        for file in result["files"]:
-            # this extracts the file extension
-            match = re.search(r'\.([a-zA-Z0-9]+)$', file["filename"])
-            file_extension = match.group(1)
-
-            if file_extension in ["flac", "mp3"] and result["fileCount"] > 0 and result["hasFreeUploadSlot"] == True:
-                relevant_results.append(result)
-            
-                # TODO: may want a more sophisticated way of selecting the best file in the future
-                if file["size"] > highest_quality_file["size"]:
-                    highest_quality_file = file
-                    highest_quality_file_user = result["username"]
-
-    return highest_quality_file, highest_quality_file_user
+        return dest_path
 
 def download_track_ytdlp(search_query: str, output_path: str) -> str :
     """
@@ -198,6 +178,37 @@ def search_slskd(search_query: str) -> list:
     print(f"Found {len(results)} results")
 
     return results
+
+def select_best_search_candidate(search_results):
+    """
+    Returns the search result with the highest quality flac or mp3 file.
+
+    Args:
+        search_results: search responses in the format of slskd.searches.search_responses()
+    
+    Returns:
+        (highest_quality_file, highest_quality_file_user: str): The file data for the best candidate, and the username of its owner
+    """
+
+    relevant_results = []
+    highest_quality_file = {"size": 0}
+    highest_quality_file_user = ""
+
+    for result in search_results:
+        for file in result["files"]:
+            # this extracts the file extension
+            match = re.search(r'\.([a-zA-Z0-9]+)$', file["filename"])
+            file_extension = match.group(1)
+
+            if file_extension in ["flac", "mp3"] and result["fileCount"] > 0 and result["hasFreeUploadSlot"] == True:
+                relevant_results.append(result)
+            
+                # TODO: may want a more sophisticated way of selecting the best file in the future
+                if file["size"] > highest_quality_file["size"]:
+                    highest_quality_file = file
+                    highest_quality_file_user = result["username"]
+
+    return highest_quality_file, highest_quality_file_user
 
 def pprint(data):
     print(json.dumps(data, indent=4))
