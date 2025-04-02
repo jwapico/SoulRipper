@@ -66,34 +66,69 @@ def download_track_slskd(search_query: str, output_path: str) -> str:
     Returns:
         str: the path to the downloaded song
     """
-    results = search_slskd(search_query)
-    if results:
-        highest_quality_file = select_best_search_candidate(results)
 
-        # slskd.transfers.enqueue(top_result["username"], top_result["files"])
+    search_results = search_slskd(search_query)
+    if search_results:
+        highest_quality_file, highest_quality_file_user = select_best_search_candidate(search_results)
 
-        # for download in slskd.transfers.get_all_downloads():
-        #     for file in download["directories"]["files"]:
-        #         if file["filename"] == top_result["files"]:
-        #             return download
+        print(f"Downloading {highest_quality_file['filename']} from user: {highest_quality_file_user}...")
+        slskd.transfers.enqueue(highest_quality_file_user, [highest_quality_file])
+
+        # for some reason enqueue doesn't give us the id of the download so we have to get it ourselves. There may be a better way to do this but idc TODO
+        for download in slskd.transfers.get_all_downloads():
+            for directory in download["directories"]:
+                for file in directory["files"]:
+                    if file["filename"] == highest_quality_file["filename"]:
+                        new_download = download
+
+        if len(new_download["directories"]) > 1 or len(new_download["directories"][0]["files"]) > 1:
+            raise Exception(f"bug: more than one file candidate in new_download: \n\n{pprint(new_download)}")
+
+        new_download_id = new_download["directories"][0]["files"][0]["id"]
+
+        # wait for the download to be completed
+        new_download_state = slskd.transfers.get_download(highest_quality_file_user, new_download_id)["state"]
+        while not "Completed" in new_download_state:
+            print(new_download_state)
+            time.sleep(1)
+            new_download_state = slskd.transfers.get_download(highest_quality_file_user, new_download_id)["state"]
+
+        # TODO: extract what the output path would be in the assets/downloads folder - look at new_download["directories"] i think it just copies the containing dir of the file
+        # TODO: if the download failed, retry from a different user, maybe next highest quality file. how many retries should we do before giving up?
+        print(new_download_state)
+        pprint(slskd.transfers.get_download(highest_quality_file_user, new_download_id))
+        return "deez nuts"
 
 def select_best_search_candidate(search_results):
+    """
+    Returns the search result with the highest quality flac or mp3 file.
+
+    Args:
+        search_results: search responses in the format of slskd.searches.search_responses()
+    
+    Returns:
+        (highest_quality_file, highest_quality_file_user: str): The file data for the best candidate, and the username of its owner
+    """
+
     relevant_results = []
     highest_quality_file = {"size": 0}
+    highest_quality_file_user = ""
 
     for result in search_results:
         for file in result["files"]:
+            # this extracts the file extension
             match = re.search(r'\.([a-zA-Z0-9]+)$', file["filename"])
             file_extension = match.group(1)
 
-            if file_extension in ["flac", "mp3", "wav"] and result["fileCount"] > 0 and result["hasFreeUploadSlot"] == True:
+            if file_extension in ["flac", "mp3"] and result["fileCount"] > 0 and result["hasFreeUploadSlot"] == True:
                 relevant_results.append(result)
             
                 # TODO: may want a more sophisticated way of selecting the best file in the future
                 if file["size"] > highest_quality_file["size"]:
                     highest_quality_file = file
+                    highest_quality_file_user = result["username"]
 
-    return highest_quality_file
+    return highest_quality_file, highest_quality_file_user
 
 def download_track_ytdlp(search_query: str, output_path: str) -> str :
     """
