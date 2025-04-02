@@ -1,0 +1,2 @@
+class SoulDB:
+	pass

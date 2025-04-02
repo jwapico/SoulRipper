@@ -3,6 +3,7 @@ import slskd_api
 import subprocess
 import re
 import os
+import json
 import argparse
 import dotenv
 import spotify_utils
@@ -54,7 +55,7 @@ def download_track(search_query: str, output_path: str) -> str:
     return download_path
 
 # TODO: make the output path work
-def download_track_slskd(search_query: str, output_path: str) -> str:
+def download_track_slskd(search_query: str, output_path: str) -> str:       
     """
     Attempts to download a track from soulseek
 
@@ -66,18 +67,33 @@ def download_track_slskd(search_query: str, output_path: str) -> str:
         str: the path to the downloaded song
     """
     results = search_slskd(search_query)
-
     if results:
-        print(f"Downloading {results[0]['files'][0]['filename']} from user {results[0]['username']}")  
-        
-        download_success = slskd.transfers.enqueue(results[0]["username"], results[0]["files"])
+        highest_quality_file = select_best_search_candidate(results)
 
-        # TODO: check if the download was actually successful, sometimes it returns True but the file is not downloaded
-        if download_success:
-            print("Download successful")
-            return "placeholder slskd download path"
-        else:
-            print("Download failed")
+        # slskd.transfers.enqueue(top_result["username"], top_result["files"])
+
+        # for download in slskd.transfers.get_all_downloads():
+        #     for file in download["directories"]["files"]:
+        #         if file["filename"] == top_result["files"]:
+        #             return download
+
+def select_best_search_candidate(search_results):
+    relevant_results = []
+    highest_quality_file = {"size": 0}
+
+    for result in search_results:
+        for file in result["files"]:
+            match = re.search(r'\.([a-zA-Z0-9]+)$', file["filename"])
+            file_extension = match.group(1)
+
+            if file_extension in ["flac", "mp3", "wav"] and result["fileCount"] > 0 and result["hasFreeUploadSlot"] == True:
+                relevant_results.append(result)
+            
+                # TODO: may want a more sophisticated way of selecting the best file in the future
+                if file["size"] > highest_quality_file["size"]:
+                    highest_quality_file = file
+
+    return highest_quality_file
 
 def download_track_ytdlp(search_query: str, output_path: str) -> str :
     """
@@ -147,6 +163,9 @@ def search_slskd(search_query: str) -> list:
     print(f"Found {len(results)} results")
 
     return results
+
+def pprint(data):
+    print(json.dumps(data, indent=4))
 
 if __name__ == "__main__":
     main()

@@ -180,3 +180,7 @@ assets/incomplete/*
 assets/cookies.txt
 assets/slskd.yml
 
+*.mp3
+*.webp
+.vscode/*
+
