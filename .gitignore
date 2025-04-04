@@ -182,5 +182,6 @@ assets/slskd.yml
 
 *.mp3
 *.webp
+*.flac
 .vscode/*
 

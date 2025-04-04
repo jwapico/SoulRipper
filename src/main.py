@@ -27,6 +27,10 @@ def main():
     SEARCH_QUERY = args.search_query
     SPOTIFY_PLAYLIST_URL = args.playlist_url
 
+    # TODO: this should not be hard coded. maybe a config file?
+    DEFAULT_OUTPUT_PATH = "/mnt/d/DJ/Music/fuck shit"
+    print(os.listdir(DEFAULT_OUTPUT_PATH))
+
     os.makedirs(OUTPUT_PATH, exist_ok=True)
 
     # if a search query is provided, download the track
@@ -65,7 +69,7 @@ def download_track_slskd(search_query: str, output_path: str) -> str:
         output_path (str): the directory to download the song to
 
     Returns:
-        str: the path to the downloaded song
+        str|None: the path to the downloaded song or None of the download was unsuccessful
     """
 
     search_results = search_slskd(search_query)
@@ -82,6 +86,7 @@ def download_track_slskd(search_query: str, output_path: str) -> str:
                     if file["filename"] == highest_quality_file["filename"]:
                         new_download = download
 
+        # python src/main.py --search-query "Arya (With Nigo) - Nigo, A$AP Rocky"
         if len(new_download["directories"]) > 1 or len(new_download["directories"][0]["files"]) > 1:
             raise Exception(f"bug: more than one file candidate in new_download: \n\n{pprint(new_download)}")
 
@@ -90,17 +95,17 @@ def download_track_slskd(search_query: str, output_path: str) -> str:
         download_id = file["id"]
 
         # wait for the download to be completed
-        new_download_state = slskd.transfers.get_download(highest_quality_file_user, download_id)["state"]
-        while not "Completed" in new_download_state:
-            print(new_download_state)
+        download_state = slskd.transfers.get_download(highest_quality_file_user, download_id)["state"]
+        while not "Completed" in download_state:
+            print(download_state)
             time.sleep(1)
-            new_download_state = slskd.transfers.get_download(highest_quality_file_user, download_id)["state"]
+            download_state = slskd.transfers.get_download(highest_quality_file_user, download_id)["state"]
 
-        # TODO: if the download failed, retry from a different user, maybe next highest quality file. how many retries should we do before giving up?
-        print(new_download_state)
+        # TODO: if the download failed, retry from a different user, maybe next highest quality file. add max_retries arg to specify max number of retries before returning None
+        print(download_state)
 
         # this moves the file from where it was downloaded to the specified output path
-        if new_download_state == "Completed, Succeeded":
+        if download_state == "Completed, Succeeded":
             containing_dir_name = os.path.basename(directory["directory"].replace("\\", "/"))
             filename = os.path.basename(file["filename"].replace("\\", "/"))
 
