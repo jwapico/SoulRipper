@@ -29,7 +29,7 @@ def main():
 
     # TODO: this should not be hard coded. maybe a config file?
     DEFAULT_OUTPUT_PATH = "/mnt/d/DJ/Music/fuck shit"
-    print(os.listdir(DEFAULT_OUTPUT_PATH))
+    OUTPUT_PATH = DEFAULT_OUTPUT_PATH if OUTPUT_PATH == "/home/soulripper" else OUTPUT_PATH
 
     os.makedirs(OUTPUT_PATH, exist_ok=True)
 
