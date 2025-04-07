@@ -8,6 +8,7 @@ import argparse
 import dotenv
 import spotify_utils
 import shutil
+from souldb import SoulDB
 
 dotenv.load_dotenv()
 slskd_api_key = os.getenv("SLSKD_API_KEY")
@@ -28,14 +29,17 @@ def main():
     SPOTIFY_PLAYLIST_URL = args.playlist_url
 
     # TODO: this should not be hard coded. maybe a config file?
-    DEFAULT_OUTPUT_PATH = "/mnt/d/DJ/soulRipper"
+    DEFAULT_OUTPUT_PATH = "/mnt/d/DJ/Music/souls"
     OUTPUT_PATH = DEFAULT_OUTPUT_PATH if OUTPUT_PATH == "/home/soulripper" else OUTPUT_PATH
 
     os.makedirs(OUTPUT_PATH, exist_ok=True)
 
+    souldb = SoulDB()
+
     # if a search query is provided, download the track
     if SEARCH_QUERY:
-        download_track(SEARCH_QUERY, OUTPUT_PATH)
+        output_path = download_track(SEARCH_QUERY, OUTPUT_PATH)
+        # TODO: figure out how the database stuff should work
     
     if SPOTIFY_PLAYLIST_URL:
         playlist_info = spotify_utils.get_playlist_from_url(SPOTIFY_PLAYLIST_URL)
@@ -59,7 +63,6 @@ def download_track(search_query: str, output_path: str) -> str:
 
     return download_path
 
-# TODO: make the output path work
 def download_track_slskd(search_query: str, output_path: str) -> str:       
     """
     Attempts to download a track from soulseek
@@ -79,7 +82,7 @@ def download_track_slskd(search_query: str, output_path: str) -> str:
         print(f"Downloading {highest_quality_file['filename']} from user: {highest_quality_file_user}...")
         slskd.transfers.enqueue(highest_quality_file_user, [highest_quality_file])
 
-        # for some reason enqueue doesn't give us the id of the download so we have to get it ourselves. There may be a better way to do this but idc TODO
+        # for some reason enqueue doesn't give us the id of the download so we have to get it ourselves, the bool returned by enqueue is also not accurate. There may be a better way to do this but idc TODO
         for download in slskd.transfers.get_all_downloads():
             for directory in download["directories"]:
                 for file in directory["files"]:
