@@ -1,4 +1,4 @@
-version: '3.8'
+# version: '3.8'
 
 services:
   soulripper:
@@ -10,7 +10,6 @@ services:
     volumes:
       - .:/home/soulripper
       - /home/soulripper/venv
-      - /mnt/d/DJ/Music:/mnt/d/DJ/Music
 
   slskd:
     image: slskd/slskd:latest
