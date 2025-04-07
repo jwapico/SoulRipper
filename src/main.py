@@ -28,7 +28,7 @@ def main():
     SPOTIFY_PLAYLIST_URL = args.playlist_url
 
     # TODO: this should not be hard coded. maybe a config file?
-    DEFAULT_OUTPUT_PATH = "/mnt/d/DJ/Music/fuck shit"
+    DEFAULT_OUTPUT_PATH = "/mnt/d/DJ/soulRipper"
     OUTPUT_PATH = DEFAULT_OUTPUT_PATH if OUTPUT_PATH == "/home/soulripper" else OUTPUT_PATH
 
     os.makedirs(OUTPUT_PATH, exist_ok=True)
