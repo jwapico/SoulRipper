@@ -6,15 +6,10 @@ import os
 import json
 import argparse
 import dotenv
-import spotify_utils
 import shutil
+
+from spotify_client import SpotifyClient
 from souldb import SoulDB
-
-dotenv.load_dotenv()
-slskd_api_key = os.getenv("SLSKD_API_KEY")
-
-# docker run -d -p 5030:5030 -p 5031:5031 -p 50300:50300 -e SLSKD_REMOTE_CONFIGURATION=true -v '/home/goop/dev/music-manager/app_data':/app --name slskd slskd/slskd:latest
-slskd = slskd_api.SlskdClient("http://slskd:5030", slskd_api_key)
 
 def main():
     # collect commandline arguments
@@ -25,27 +20,27 @@ def main():
     parser.add_argument("--playlist-url", dest="playlist_url", help="URL of Spotify playlist")
     args = parser.parse_args()
     OUTPUT_PATH = os.path.abspath(args.output_path or args.pos_output_path)
+    os.makedirs(OUTPUT_PATH, exist_ok=True)
     SEARCH_QUERY = args.search_query
     SPOTIFY_PLAYLIST_URL = args.playlist_url
+    # DEFAULT_OUTPUT_PATH = "/mnt/d/DJ/Music/souls"
 
-    # TODO: this should not be hard coded. maybe a config file?
-    DEFAULT_OUTPUT_PATH = "/mnt/d/DJ/Music/souls"
-    OUTPUT_PATH = DEFAULT_OUTPUT_PATH if OUTPUT_PATH == "/home/soulripper" else OUTPUT_PATH
+    # we communicate with slskd through port 5030
+    dotenv.load_dotenv()
+    SLSKD_API_KEY = os.getenv("SLSKD_API_KEY")
+    slskd_client = slskd_api.SlskdClient("http://slskd:5030", SLSKD_API_KEY)
 
-    os.makedirs(OUTPUT_PATH, exist_ok=True)
-
-    souldb = SoulDB()
+    SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
+    SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
+    SPOTIFY_REDIRECT_URI = os.getenv("SPOTIFY_REDIRECT_URI")
+    spotify_client = SpotifyClient(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI)
 
     # if a search query is provided, download the track
     if SEARCH_QUERY:
-        output_path = download_track(SEARCH_QUERY, OUTPUT_PATH)
-        # TODO: figure out how the database stuff should work
+        output_path = download_track(slskd_client, SEARCH_QUERY, OUTPUT_PATH)
+        # TODO: insert info into database
     
-    if SPOTIFY_PLAYLIST_URL:
-        playlist_info = spotify_utils.get_playlist_from_url(SPOTIFY_PLAYLIST_URL)
-        print(playlist_info)
-
-def download_track(search_query: str, output_path: str) -> str:
+def download_track(slskd_client, search_query: str, output_path: str) -> str:
     """
     Downloads a track from soulseek or youtube, only downloading from youtube if the query is not found on soulseek
 
@@ -56,14 +51,14 @@ def download_track(search_query: str, output_path: str) -> str:
     Returns:
         str: the path to the downloaded file
     """
-    download_path = download_track_slskd(search_query, output_path)
+    download_path = download_track_slskd(slskd_client, search_query, output_path)
 
     if download_path is None:
         download_path = download_track_ytdlp(search_query, output_path)
 
     return download_path
 
-def download_track_slskd(search_query: str, output_path: str) -> str:       
+def download_track_slskd(slskd_client, search_query: str, output_path: str) -> str:       
     """
     Attempts to download a track from soulseek
 
@@ -75,15 +70,15 @@ def download_track_slskd(search_query: str, output_path: str) -> str:
         str|None: the path to the downloaded song or None of the download was unsuccessful
     """
 
-    search_results = search_slskd(search_query)
+    search_results = search_slskd(slskd_client, search_query)
     if search_results:
         highest_quality_file, highest_quality_file_user = select_best_search_candidate(search_results)
 
         print(f"Downloading {highest_quality_file['filename']} from user: {highest_quality_file_user}...")
-        slskd.transfers.enqueue(highest_quality_file_user, [highest_quality_file])
+        slskd_client.transfers.enqueue(highest_quality_file_user, [highest_quality_file])
 
         # for some reason enqueue doesn't give us the id of the download so we have to get it ourselves, the bool returned by enqueue is also not accurate. There may be a better way to do this but idc TODO
-        for download in slskd.transfers.get_all_downloads():
+        for download in slskd_client.transfers.get_all_downloads():
             for directory in download["directories"]:
                 for file in directory["files"]:
                     if file["filename"] == highest_quality_file["filename"]:
@@ -98,11 +93,11 @@ def download_track_slskd(search_query: str, output_path: str) -> str:
         download_id = file["id"]
 
         # wait for the download to be completed
-        download_state = slskd.transfers.get_download(highest_quality_file_user, download_id)["state"]
+        download_state = slskd_client.transfers.get_download(highest_quality_file_user, download_id)["state"]
         while not "Completed" in download_state:
             print(download_state)
             time.sleep(1)
-            download_state = slskd.transfers.get_download(highest_quality_file_user, download_id)["state"]
+            download_state = slskd_client.transfers.get_download(highest_quality_file_user, download_id)["state"]
 
         # TODO: if the download failed, retry from a different user, maybe next highest quality file. add max_retries arg to specify max number of retries before returning None
         print(download_state)
@@ -164,7 +159,7 @@ def download_track_ytdlp(search_query: str, output_path: str) -> str :
 
     return download_path
 
-def search_slskd(search_query: str) -> list:
+def search_slskd(slskd_client, search_query: str) -> list:
     """
     Searches for a track on soulseek
 
@@ -174,15 +169,15 @@ def search_slskd(search_query: str) -> list:
     Returns:
         list: a list of search results
     """
-    search = slskd.searches.search_text(search_query)
+    search = slskd_client.searches.search_text(search_query)
     search_id = search["id"]
 
     print(f"Searching for: '{search_query}'")
-    while slskd.searches.state(search_id)["isComplete"] == False:
+    while slskd_client.searches.state(search_id)["isComplete"] == False:
         print("Searching...")
         time.sleep(1)
 
-    results = slskd.searches.search_responses(search_id)
+    results = slskd_client.searches.search_responses(search_id)
     print(f"Found {len(results)} results")
 
     return results
