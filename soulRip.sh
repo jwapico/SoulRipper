@@ -1,19 +1,19 @@
 #!/bin/bash
 
-running=$(docker ps --filter "name=soulripper" -q)
+container=$(docker ps -a --filter "name=soulripper" -q)
 
-if [ -n "$running" ]; then
-    echo "Container is running. Bringing it down and removing volumes..."
-    docker-compose down --volumes
+if [ -n "$container" ]; then
+    echo "Container exists. Bringing it down and removing volumes..."
+    docker compose down --volumes --remove-orphans
 else
-    echo "No running container found. Proceeding with build and start..."
+    echo "No container found. Proceeding with build and start..."
 fi
 
 echo "Building container(s)..."
-docker-compose build
+docker compose build
 
 echo "Starting container(s)..."
-docker-compose up -d
+docker compose up -d
 
 echo "Entering 'soulripper' container shell..."
 docker exec -it soulripper bash
