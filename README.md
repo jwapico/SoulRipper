@@ -13,13 +13,20 @@ systemd=true
 
 [automount]
 enabled=true
+options = "metadata,umask=22,fmask=11"
 mountFsTab=false
 ```
 
-Then paste this in `~/.bashrc`:
+If you want to download to an external drive, paste this in `~/.bashrc` (change drive name if needed):
 
 ```
 sudo mount -t drvfs D: /mnt/d
+```
+
+You also need to edit this line of `docker-compose.yml`:
+
+```
+     - /mnt/d/DJ/Music/souls/:/mnt/d/DJ/Music/souls
 ```
 
 # Configuration

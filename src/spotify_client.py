@@ -8,8 +8,8 @@ class SpotifyClient:
     CLIENT_SECRET: str
     REDIRECT_URI: str
     SPOTIFY_SCOPE: str
-    spotipy_client: None
     USER_ID: None
+    spotipy_client: None
 
     def __init__(self, client_id, client_secret, redirect_uri, spotify_scope="user-library-read playlist-modify-public"):
         self.CLIENT_ID = client_id

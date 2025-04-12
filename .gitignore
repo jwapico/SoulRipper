@@ -184,4 +184,5 @@ assets/slskd.yml
 *.webp
 *.flac
 .vscode/*
+debug.json
 

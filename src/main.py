@@ -19,17 +19,18 @@ def main():
     parser.add_argument("--search-query", dest="search_query", help="The output directory in which your files will be downloaded")
     parser.add_argument("--playlist-url", dest="playlist_url", help="URL of Spotify playlist")
     args = parser.parse_args()
-    OUTPUT_PATH = os.path.abspath(args.output_path or args.pos_output_path)
-    os.makedirs(OUTPUT_PATH, exist_ok=True)
     SEARCH_QUERY = args.search_query
     SPOTIFY_PLAYLIST_URL = args.playlist_url
+    OUTPUT_PATH = os.path.abspath(args.output_path or args.pos_output_path)
     # DEFAULT_OUTPUT_PATH = "/mnt/d/DJ/Music/souls"
+    os.makedirs(OUTPUT_PATH, exist_ok=True)
 
-    # we communicate with slskd through port 5030
+    # we communicate with slskd through port 5030, you can visit localhost:5030 to see the web front end. its at slskd:5030 in the docker container though.
     dotenv.load_dotenv()
     SLSKD_API_KEY = os.getenv("SLSKD_API_KEY")
     slskd_client = slskd_api.SlskdClient("http://slskd:5030", SLSKD_API_KEY)
 
+    # connect to spotify
     SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
     SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
     SPOTIFY_REDIRECT_URI = os.getenv("SPOTIFY_REDIRECT_URI")
@@ -39,6 +40,12 @@ def main():
     if SEARCH_QUERY:
         output_path = download_track(slskd_client, SEARCH_QUERY, OUTPUT_PATH)
         # TODO: insert info into database
+
+    if SPOTIFY_PLAYLIST_URL:
+        # TODO something
+        pass
+
+    save_json(spotify_client.get_all_playlists())
     
 def download_track(slskd_client, search_query: str, output_path: str) -> str:
     """
@@ -215,6 +222,11 @@ def select_best_search_candidate(search_results):
 
 def pprint(data):
     print(json.dumps(data, indent=4))
+
+def save_json(data, filepath="debug.json"):
+    with open(filepath, "w") as file:
+        json.dump(data, file)
+
 
 if __name__ == "__main__":
     main()
