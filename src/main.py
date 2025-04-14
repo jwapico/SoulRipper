@@ -45,7 +45,9 @@ def main():
         # TODO something
         pass
 
-    save_json(spotify_client.get_all_playlists())
+    # save_json(spotify_client.get_all_playlists(), filepath="all_playlists.json")
+    # save_json(spotify_client.get_all_playlist_tracks(""), "Yup.json")
+    save_json(spotify_client.get_all_playlist_tracks("spotify:playlist:0GwXbTKthfWwpfnyDxZ7Sq"), "Yup.json")
     
 def download_track(slskd_client, search_query: str, output_path: str) -> str:
     """
