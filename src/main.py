@@ -7,6 +7,7 @@ import json
 import argparse
 import dotenv
 import shutil
+import sqlite3
 
 from spotify_client import SpotifyClient
 from souldb import SoulDB
@@ -34,11 +35,26 @@ def main():
     SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
     SPOTIFY_REDIRECT_URI = os.getenv("SPOTIFY_REDIRECT_URI")
     spotify_client = SpotifyClient(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI)
-
+    
     # if a search query is provided, download the track
     if SEARCH_QUERY:
         output_path = download_track(slskd_client, SEARCH_QUERY, OUTPUT_PATH)
         # TODO: insert info into database
+        
+        # connection = sqlite3.connect('Songs.db')
+        # cursor = connection.cursor()
+        # creating_table = '''CREATE TABLE IF NOT EXISTS songs (
+        #                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+        #                     title TEXT,
+        #                     filePath TEXT )
+        #                  '''
+        # cursor.execute(creating_table)
+        # insert = '''INSERT INTO songs (title, filePath)
+        #             VALUES (%s, %s)'''
+        # cursor.execute(insert,('songTitle',output_path,))
+        # connection.commit()
+        # cursor.close()
+        # connection.close()
 
     if SPOTIFY_PLAYLIST_URL:
         # TODO something

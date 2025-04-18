@@ -10,6 +10,10 @@ services:
     volumes:
       - .:/home/soulripper
       - /home/soulripper/venv
+<<<<<<< HEAD
+=======
+      # - /Users/nathanv/Terminal/Music:/mnt/d/Music
+>>>>>>> 43dfeab77b904aa2c066364939822abf0349db04
 
   slskd:
     image: slskd/slskd:latest
