@@ -7,7 +7,6 @@ import json
 import argparse
 import dotenv
 import shutil
-import sqlite3
 import sqlalchemy as sql
 from sqlalchemy.orm import declarative_base, sessionmaker
 
@@ -44,25 +43,19 @@ def main():
         output_path = download_track(slskd_client, SEARCH_QUERY, OUTPUT_PATH)
         # TODO: insert info into database
         
-        # connection = sqlite3.connect('Songs.db')
-        # cursor = connection.cursor()
-        # creating_table = '''CREATE TABLE IF NOT EXISTS songs (
-        #                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-        #                     title TEXT,
-        #                     filePath TEXT )
-        #                  '''
-        # cursor.execute(creating_table)
-        # insert = '''INSERT INTO songs (title, filePath)
-        #             VALUES (%s, %s)'''
-        # cursor.execute(insert,('songTitle',output_path,))
-        # connection.commit()
-        # cursor.close()
-        # connection.close()
-
     if SPOTIFY_PLAYLIST_URL:
         # TODO something
         pass
 
+    engine = sql.create_engine("sqlite:///assets/soul.db")
+    SoulDB.Base.metadata.create_all(engine)
+    Session = sessionmaker(bind=engine)
+    session = Session()
+    SoulDB.UserInfo.add_user(session, "test_user", "test_client_id", "test_client_secret")
+
+    users = session.query(SoulDB.UserInfo).all()
+    for user in users:
+        print(user.username, user.id)
     LikedSongs = spotify_client.get_liked_songs()
     save_json(LikedSongs, "liked_songs.json")
     for song in LikedSongs:

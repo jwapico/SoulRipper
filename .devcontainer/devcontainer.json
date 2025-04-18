@@ -12,7 +12,8 @@
 				"github.copilot-chat",
 				"albert.tabout",
 				"ms-azuretools.vscode-docker",
-				"ClemensPeters.format-json"
+				"ClemensPeters.format-json",
+                "qwtel.sqlite-viewer"
 			],
 			"settings": {
 				"terminal.integrated.defaultProfile.linux": "bash"
