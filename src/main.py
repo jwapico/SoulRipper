@@ -23,15 +23,14 @@ def main():
     SEARCH_QUERY = args.search_query
     SPOTIFY_PLAYLIST_URL = args.playlist_url
     OUTPUT_PATH = os.path.abspath(args.output_path or args.pos_output_path)
-    # DEFAULT_OUTPUT_PATH = "/mnt/d/DJ/Music/souls"
     os.makedirs(OUTPUT_PATH, exist_ok=True)
 
-    # we communicate with slskd through port 5030, you can visit localhost:5030 to see the web front end. its at slskd:5030 in the docker container though.
+    # we communicate with slskd through port 5030, you can visit localhost:5030 to see the web front end. its at slskd:5030 in the docker container though
     dotenv.load_dotenv()
     SLSKD_API_KEY = os.getenv("SLSKD_API_KEY")
     slskd_client = slskd_api.SlskdClient("http://slskd:5030", SLSKD_API_KEY)
 
-    # connect to spotify
+    # connect to spotify API
     SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
     SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
     SPOTIFY_REDIRECT_URI = os.getenv("SPOTIFY_REDIRECT_URI")
@@ -61,10 +60,8 @@ def main():
         # TODO something
         pass
 
-    # save_json(spotify_client.get_all_playlists(), filepath="all_playlists.json")
-    # save_json(spotify_client.get_all_playlist_tracks(""), "Yup.json")
-    # save_json(spotify_client.get_all_playlist_tracks("spotify:playlist:0GwXbTKthfWwpfnyDxZ7Sq"), "Yup.json")
-    
+    save_json(spotify_client.get_liked_songs(), "liked_songs.json")
+
 def download_track(slskd_client, search_query: str, output_path: str) -> str:
     """
     Downloads a track from soulseek or youtube, only downloading from youtube if the query is not found on soulseek
@@ -244,7 +241,6 @@ def pprint(data):
 def save_json(data, filepath="debug.json"):
     with open(filepath, "w") as file:
         json.dump(data, file)
-
 
 if __name__ == "__main__":
     main()

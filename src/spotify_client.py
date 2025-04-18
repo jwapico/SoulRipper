@@ -74,3 +74,17 @@ class SpotifyClient:
         playlist_id = match.group(1)
 
         return self.spotipy_client.playlist(playlist_id)
+    
+    def get_liked_songs(self):
+        all_tracks = []
+        offset = 0
+
+        while True:
+            response = self.spotipy_client.current_user_saved_tracks(limit=50, offset=offset)
+            all_tracks.extend(response["items"])
+            offset += 50
+
+            if len(response["items"]) < 50:
+                break
+            
+        return all_tracks
