@@ -8,9 +8,11 @@ import argparse
 import dotenv
 import shutil
 import sqlite3
+import sqlalchemy as sql
+from sqlalchemy.orm import declarative_base, sessionmaker
 
 from spotify_client import SpotifyClient
-from souldb import SoulDB
+import souldb as SoulDB
 
 def main():
     # collect commandline arguments
@@ -36,6 +38,7 @@ def main():
     SPOTIFY_REDIRECT_URI = os.getenv("SPOTIFY_REDIRECT_URI")
     spotify_client = SpotifyClient(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI)
     
+    # save_json(spotify_client.get_liked_songs())
     # if a search query is provided, download the track
     if SEARCH_QUERY:
         output_path = download_track(slskd_client, SEARCH_QUERY, OUTPUT_PATH)
@@ -60,7 +63,10 @@ def main():
         # TODO something
         pass
 
-    save_json(spotify_client.get_liked_songs(), "liked_songs.json")
+    LikedSongs = spotify_client.get_liked_songs()
+    save_json(LikedSongs, "liked_songs.json")
+    for song in LikedSongs:
+        pprint(song['track']['name'], song[])
 
 def download_track(slskd_client, search_query: str, output_path: str) -> str:
     """
