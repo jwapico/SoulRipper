@@ -5,8 +5,11 @@
 # from what ive read sqlalchemy works for both sqlite .db files and postgresql, so we can use it for working with the local database and the postgresql database on the mines server
 # https://docs.sqlalchemy.org/en/20/intro.html
 import sqlalchemy as sql
+from sqlalchemy.orm import declarative_base
 
-class Tracks(sql.orm.declarative_base()):
+Base = declarative_base()
+
+class Tracks(Base):
 	__tablename__ = "tracks"
 	id = sql.Column(sql.Integer, primary_key=True)
 	filepath = sql.Column(sql.String, nullable=False)
@@ -23,7 +26,7 @@ class Tracks(sql.orm.declarative_base()):
 		session.add(new_track)
 		session.commit()
 
-class Playlists(sql.orm.declarative_base()):
+class Playlists(Base):
 	__tablename__ = "playlists"
 	id = sql.Column(sql.Integer, primary_key=True)
 	name = sql.Column(sql.String, nullable=False)
@@ -38,8 +41,8 @@ class Playlists(sql.orm.declarative_base()):
 
 # TODO: idk what should go here, or what the 3rd table should even include
 # 	- maybe we should create a table for genres, though we could also just treat genres as playlists
-class User(sql.orm.declarative_base()):
-	__tablename__ = "user"
+class UserInfo(Base):
+	__tablename__ = "user_info"
 	id = sql.Column(sql.Integer, primary_key=True)
 	username = sql.Column(sql.String, nullable=False)
 	spotify_client_id = sql.Column(sql.String, nullable=True)
