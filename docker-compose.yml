@@ -10,7 +10,7 @@ services:
     volumes:
       - .:/home/soulripper
       - /home/soulripper/venv
-      - /mnt/d/DJ/Music/souls/:/mnt/d/DJ/Music/souls
+      # - /Users/nathanv/Terminal/Music:/mnt/d/Music
 
   slskd:
     image: slskd/slskd:latest
