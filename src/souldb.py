@@ -9,47 +9,65 @@ from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
 
-class Tracks(Base):
-	__tablename__ = "tracks"
-	id = sql.Column(sql.Integer, primary_key=True)
-	filepath = sql.Column(sql.String, nullable=False)
-	title = sql.Column(sql.String, nullable=False)
-	artist = sql.Column(sql.String, nullable=False)
-	release_date = sql.Column(sql.String, nullable=True)
-	explicit = sql.Column(sql.Boolean, nullable=True)
-	date_liked = sql.Column(sql.String, nullable=True)
-	comments = sql.Column(sql.String, nullable=True)
+def createPlaylistTables(playlists, engine):
+    dropAllPlaylists(playlists, engine)
+    playlistsList = []
+    for playlist in playlists:
+        attr_dict = {'__tablename__': playlist, 'id': sql.Column(sql.Integer, primary_key=True),'title': sql.Column(sql.Text)}
+        playlistsList.append(type(playlist, (Base,), attr_dict))
+    Base.metadata.create_all(bind=engine)
 
-	@classmethod
-	def add_track(cls, session, filepath, title, artist, release_date, explicit, date_liked, comments):
-		new_track = cls(filepath=filepath, title=title, artist=artist, release_date=release_date, explicit=explicit, date_liked=date_liked, comments=comments)
-		session.add(new_track)
-		session.commit()
+def dropAllPlaylists(playlists, engine):
+    metadata = sql.MetaData()
+    metadata.reflect(bind=engine)
+    tables_to_drop = []
+    for playlist in playlists:
+        table_to_drop = metadata.tables.get(playlist)
+        if table_to_drop is not None:
+            tables_to_drop.append(table_to_drop)
+    Base.metadata.drop_all(engine, tables_to_drop, checkfirst=True)
+
+class Tracks(Base):
+    __tablename__ = "tracks"
+    id = sql.Column(sql.Integer, primary_key=True)
+    filepath = sql.Column(sql.String, nullable=False)
+    title = sql.Column(sql.String, nullable=False)
+    artist = sql.Column(sql.String, nullable=False)
+    release_date = sql.Column(sql.String, nullable=True)
+    explicit = sql.Column(sql.Boolean, nullable=True)
+    date_liked = sql.Column(sql.String, nullable=True)
+    comments = sql.Column(sql.String, nullable=True)
+
+    @classmethod
+    def add_track(cls, session, filepath, title, artist, release_date, explicit, date_liked, comments):
+        new_track = cls(filepath=filepath, title=title, artist=artist, release_date=release_date, explicit=explicit, date_liked=date_liked, comments=comments)
+        session.add(new_track)
+        session.commit()
 
 class Playlists(Base):
-	__tablename__ = "playlists"
-	id = sql.Column(sql.Integer, primary_key=True)
-	name = sql.Column(sql.String, nullable=False)
-	date_created = sql.Column(sql.String, nullable=True)
-	comments = sql.Column(sql.String, nullable=True)
+    __tablename__ = "playlists"
+    id = sql.Column(sql.Integer, primary_key=True)
+    name = sql.Column(sql.String, nullable=False)
+    date_created = sql.Column(sql.String, nullable=True)
+    comments = sql.Column(sql.String, nullable=True)
 
-	@classmethod
-	def add_playlist(cls, session, name, date_created, comments):
-		new_playlist = cls(name=name, date_created=date_created, comments=comments)
-		session.add(new_playlist)
-		session.commit()
+    @classmethod
+    def add_playlist(cls, session, name, date_created, comments):
+        new_playlist = cls(name=name, date_created=date_created, comments=comments)
+        session.add(new_playlist)
+        session.commit()
 
 # TODO: idk what should go here, or what the 3rd table should even include
 # 	- maybe we should create a table for genres, though we could also just treat genres as playlists
 class UserInfo(Base):
-	__tablename__ = "user_info"
-	id = sql.Column(sql.Integer, primary_key=True)
-	username = sql.Column(sql.String, nullable=False)
-	spotify_client_id = sql.Column(sql.String, nullable=True)
-	spotify_client_secret = sql.Column(sql.String, nullable=True)
+    __tablename__ = "user_info"
+    id = sql.Column(sql.Integer, primary_key=True)
+    username = sql.Column(sql.String, nullable=False)
+    spotify_client_id = sql.Column(sql.String, nullable=True)
+    spotify_client_secret = sql.Column(sql.String, nullable=True)
 
-	@classmethod
-	def add_user(cls, session, username, spotify_client_id, spotify_client_secret):
-		new_user = cls(username=username, spotify_client_id=spotify_client_id, spotify_client_secret=spotify_client_secret)
-		session.add(new_user)
-		session.commit()
+    @classmethod
+    def add_user(cls, session, username, spotify_client_id, spotify_client_secret):
+        new_user = cls(username=username, spotify_client_id=spotify_client_id, spotify_client_secret=spotify_client_secret)
+        session.add(new_user)
+        session.commit()

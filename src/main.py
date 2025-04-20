@@ -47,7 +47,7 @@ def main():
         # TODO something
         pass
 
-    engine = sql.create_engine("sqlite:///assets/soul.db")
+    engine = sql.create_engine("sqlite:///assets/soul.db", echo = True)
     SoulDB.Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine)
     session = Session()
@@ -56,10 +56,25 @@ def main():
     users = session.query(SoulDB.UserInfo).all()
     for user in users:
         print(user.username, user.id)
-    LikedSongs = spotify_client.get_liked_songs()
-    save_json(LikedSongs, "liked_songs.json")
-    for song in LikedSongs:
-        pprint(song['track']['name'], song[])
+    
+    # LikedSongs = spotify_client.get_liked_songs()
+    # save_json(LikedSongs, "liked_songs.json")
+    createAllPlaylists(spotify_client, engine)
+    # for song in LikedSongs:
+    
+        # print(song['track']['name'])
+        # SoulDB.Playlists.add_playlist(session, "Liked Songs", "Gobbledy gook", "None",)
+        # pprint(song['track']['name'], song[])
+
+def createAllPlaylists(client, engine):
+    all_playlists = client.get_all_playlists()
+    save_json(all_playlists,"allPlaylists.json")
+    playlist_titles = []
+    for playlist in all_playlists:
+        playlist_titles.append(playlist["name"])
+    SoulDB.createPlaylistTables(playlist_titles, engine)
+    
+    # SoulDB.createPlaylistTables()
 
 def download_track(slskd_client, search_query: str, output_path: str) -> str:
     """
