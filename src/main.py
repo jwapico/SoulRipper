@@ -12,6 +12,7 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 
 from spotify_client import SpotifyClient
 import souldb as SoulDB
+from souldb import Base
 
 def main():
     # collect commandline arguments
@@ -37,7 +38,6 @@ def main():
     SPOTIFY_REDIRECT_URI = os.getenv("SPOTIFY_REDIRECT_URI")
     spotify_client = SpotifyClient(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI)
     
-    # save_json(spotify_client.get_liked_songs())
     # if a search query is provided, download the track
     if SEARCH_QUERY:
         output_path = download_track(slskd_client, SEARCH_QUERY, OUTPUT_PATH)
@@ -47,24 +47,20 @@ def main():
         # TODO something
         pass
 
+    # create the engine with the local soul.db file
     engine = sql.create_engine("sqlite:///assets/soul.db", echo = True)
+
+    # drop everything in the database
+    metadata = sql.MetaData()
+    metadata.reflect(bind=engine)
+    metadata.drop_all(engine)
+
+    # create the tables defined in souldb.py and create a session
     SoulDB.Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine)
     session = Session()
-    SoulDB.UserInfo.add_user(session, "test_user", "test_client_id", "test_client_secret")
-
-    users = session.query(SoulDB.UserInfo).all()
-    for user in users:
-        print(user.username, user.id)
     
-    # LikedSongs = spotify_client.get_liked_songs()
-    # save_json(LikedSongs, "liked_songs.json")
     createAllPlaylists(spotify_client, engine)
-    # for song in LikedSongs:
-    
-        # print(song['track']['name'])
-        # SoulDB.Playlists.add_playlist(session, "Liked Songs", "Gobbledy gook", "None",)
-        # pprint(song['track']['name'], song[])
 
 def createAllPlaylists(client, engine):
     all_playlists = client.get_all_playlists()
@@ -74,8 +70,6 @@ def createAllPlaylists(client, engine):
         playlist_titles.append(playlist["name"])
     SoulDB.createPlaylistTables(playlist_titles, engine)
     
-    # SoulDB.createPlaylistTables()
-
 def download_track(slskd_client, search_query: str, output_path: str) -> str:
     """
     Downloads a track from soulseek or youtube, only downloading from youtube if the query is not found on soulseek
