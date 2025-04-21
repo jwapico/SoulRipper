@@ -11,10 +11,10 @@ Base = declarative_base()
 
 def createPlaylistTables(playlists, engine):
     # dropAllPlaylists(playlists, engine)
-    playlistsList = []
+    playlistTables = []
     for playlist in playlists:
-        attr_dict = {'__tablename__': playlist, 'id': sql.Column(sql.Integer, primary_key=True),'title': sql.Column(sql.Text)}
-        playlistsList.append(type(playlist, (Base,), attr_dict))
+        attr_dict = {'__tablename__': playlist, 'id': sql.Column(sql.Integer, primary_key=True),'songId': sql.Column(sql.Integer)}
+        playlistTables.append(type(playlist, (Base,), attr_dict))
     Base.metadata.create_all(bind=engine)
 
 def dropAllPlaylists(playlists, engine):
