@@ -11,7 +11,7 @@ class SpotifyClient:
     USER_ID: None
     spotipy_client: None
 
-    def __init__(self, client_id, client_secret, redirect_uri, spotify_scope="user-library-read playlist-modify-public"):
+    def __init__(self, client_id, client_secret, redirect_uri, spotify_scope="user-library-read user-read-private playlist-read-collaborative playlist-read-private"):
         self.CLIENT_ID = client_id
         self.CLIENT_SECRET = client_secret
         self.REDIRECT_URI = redirect_uri
