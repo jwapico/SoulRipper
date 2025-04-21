@@ -3,3 +3,4 @@ slskd-api
 yt-dlp
 spotipy
 sqlalchemy
+mutagen
