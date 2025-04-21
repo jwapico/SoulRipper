@@ -15,6 +15,14 @@ from spotify_client import SpotifyClient
 import souldb as SoulDB
 from souldb import Base
 
+# TODO:
+#   - better search for soulseek given song title and artist
+#   - create and sync database with spotify info
+#   - create and sync database with local music directory
+#   - better user interface - gui or otherwise
+#       - some sort of config file for api keys, directory paths, etc
+#       - make cli better
+
 def main():
     # collect commandline arguments
     parser = argparse.ArgumentParser(description="")
@@ -37,8 +45,8 @@ def main():
     SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
     SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
     SPOTIFY_REDIRECT_URI = os.getenv("SPOTIFY_REDIRECT_URI")
-    spotify_client = SpotifyClient(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI, spotify_scope="user-library-read playlist-modify-public")
-    # spotify_client = SpotifyClient(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI)
+    # spotify_client = SpotifyClient(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI, spotify_scope="user-library-read playlist-modify-public")
+    spotify_client = SpotifyClient(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI)
     
     # if a search query is provided, download the track
     if SEARCH_QUERY:
@@ -63,7 +71,7 @@ def main():
     db_session = Session()
 
     add_tracks_from_music_dir("music", db_session)
-    # createAllPlaylists(spotify_client, engine)
+    createAllPlaylists(spotify_client, engine)
 
 def extract_metadata(filepath: str) -> dict:
     """
