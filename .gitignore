@@ -185,4 +185,4 @@ assets/slskd.yml
 *.flac
 .vscode/*
 *.json
-
+assets/soul.db
