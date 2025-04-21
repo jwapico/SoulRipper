@@ -10,7 +10,7 @@ from sqlalchemy.orm import declarative_base
 Base = declarative_base()
 
 def createPlaylistTables(playlists, engine):
-    dropAllPlaylists(playlists, engine)
+    # dropAllPlaylists(playlists, engine)
     playlistsList = []
     for playlist in playlists:
         attr_dict = {'__tablename__': playlist, 'id': sql.Column(sql.Integer, primary_key=True),'title': sql.Column(sql.Text)}
