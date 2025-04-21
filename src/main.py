@@ -9,6 +9,7 @@ import dotenv
 import shutil
 import sqlalchemy as sql
 from sqlalchemy.orm import declarative_base, sessionmaker
+import mutagen
 
 from spotify_client import SpotifyClient
 import souldb as SoulDB
@@ -36,7 +37,8 @@ def main():
     SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
     SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
     SPOTIFY_REDIRECT_URI = os.getenv("SPOTIFY_REDIRECT_URI")
-    spotify_client = SpotifyClient(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI)
+    spotify_client = SpotifyClient(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI, spotify_scope="user-library-read playlist-modify-public")
+    # spotify_client = SpotifyClient(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI)
     
     # if a search query is provided, download the track
     if SEARCH_QUERY:
@@ -58,18 +60,65 @@ def main():
     # create the tables defined in souldb.py and create a session
     SoulDB.Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine)
-    session = Session()
-    
-    createAllPlaylists(spotify_client, engine)
+    db_session = Session()
 
-def createAllPlaylists(client, engine):
-    all_playlists = client.get_all_playlists()
+    add_tracks_from_music_dir("music", db_session)
+    # createAllPlaylists(spotify_client, engine)
+
+def extract_metadata(filepath: str) -> dict:
+    """
+    Extracts metadata from a file using mutagen
+
+    Args:
+        filepath (str): the path to the file
+
+    Returns:
+        dict: a dictionary of metadata
+    """
+    audio = mutagen.File(filepath)
+
+    if not audio:
+        return None
+
+    return {
+        "title":  audio.get("title", [None])[0],
+        "artist": audio.get("artist", [None])[0],
+        "album":  audio.get("album", [None])[0],
+        "genre":  audio.get("genre", [None])[0],
+        "date":   audio.get("date", [None])[0],
+        "track":  audio.get("tracknumber", [None])[0],
+        "length": int(audio.info.length) if audio.info else None,
+    }
+
+def add_tracks_from_music_dir(music_dir: str, db_session):
+    """
+    Adds all songs in the music directory to the database
+
+    Args:
+        music_dir (str): the directory to add songs from
+    """
+    for root, dirs, files in os.walk(music_dir):
+        for file in files:
+            if file.endswith(".mp3") or file.endswith(".flac") or file.endswith(".wav"):
+                filepath = os.path.abspath(os.path.join(root, file))
+                file_metadata = extract_metadata(filepath)
+                title  = file_metadata.get("title")
+                artist = file_metadata.get("artist")
+                album  = file_metadata.get("album")
+                genre  = file_metadata.get("genre")
+                date   = file_metadata.get("date")
+                length = file_metadata.get("length")
+                SoulDB.Tracks.add_track(db_session, filepath, title, artist, date, None, None, None)
+
+def createAllPlaylists(spotify_client, engine):
+    all_playlists = spotify_client.get_all_playlists()
     save_json(all_playlists,"allPlaylists.json")
+
     playlist_titles = []
     for playlist in all_playlists:
         playlist_titles.append(playlist["name"])
     SoulDB.createPlaylistTables(playlist_titles, engine)
-    
+        
 def download_track(slskd_client, search_query: str, output_path: str) -> str:
     """
     Downloads a track from soulseek or youtube, only downloading from youtube if the query is not found on soulseek
