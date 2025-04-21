@@ -13,7 +13,7 @@ def createPlaylistTables(playlists, engine):
     # dropAllPlaylists(playlists, engine)
     playlistTables = []
     for playlist in playlists:
-        attr_dict = {'__tablename__': playlist, 'id': sql.Column(sql.Integer, primary_key=True),'songId': sql.Column(sql.Integer)}
+        attr_dict = {'__tablename__': playlist, 'song_id': sql.Column(sql.Integer, primary_key=True)}
         playlistTables.append(type(playlist, (Base,), attr_dict))
     Base.metadata.create_all(bind=engine)
 

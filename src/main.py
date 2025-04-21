@@ -61,14 +61,23 @@ def main():
     session = Session()
     
     createAllPlaylists(spotify_client, engine)
+    
 
 def createAllPlaylists(client, engine):
     all_playlists = client.get_all_playlists()
     save_json(all_playlists,"allPlaylists.json")
     playlist_titles = []
+    first = True
     for playlist in all_playlists:
-        playlist_titles.append(playlist["name"])
-    SoulDB.createPlaylistTables(playlist_titles, engine)
+        
+        all_songs = client.get_all_playlist_tracks(playlist["id"])
+        playlistName = playlist["name"]
+        if first == True: 
+            save_json(all_songs, f"allSongs{playlistName}")
+            save_json(client.get_track(all_songs[0]['track']['id']), "Footage!")
+        playlist_titles.append(playlistName)
+        first = False
+    # SoulDB.createPlaylistTables(playlist_titles, engine)
     
 def download_track(slskd_client, search_query: str, output_path: str) -> str:
     """

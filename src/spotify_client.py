@@ -88,3 +88,6 @@ class SpotifyClient:
                 break
             
         return all_tracks
+    
+    def get_track(self, id):
+        return self.spotipy_client.track(id)
