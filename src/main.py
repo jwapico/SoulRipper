@@ -85,7 +85,6 @@ def main():
     # add_tracks_from_music_dir("music", sql_session)
     # createAllPlaylists(spotify_utils, engine)
 
-# TODO: if no output path is provided use the name of the playlist in project dir
 def download_playlist(slskd_client, spotify_utils: SpotifyUtils, sql_session, playlist_url: str, output_path: str):
     """
     Downloads a playlist from spotify
@@ -103,7 +102,6 @@ def download_playlist(slskd_client, spotify_utils: SpotifyUtils, sql_session, pl
     duplicate_playlist = sql_session.query(SoulDB.Playlists).filter_by(spotify_id=playlist_id).first()
     if duplicate_playlist is None:
         SoulDB.Playlists.add_playlist(sql_session, playlist_id, playlist_info["name"], playlist_info["description"])
-
 
     output_path = os.path.join(output_path, playlist_info["name"])
     os.makedirs(output_path, exist_ok=True)
