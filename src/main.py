@@ -67,8 +67,9 @@ def main():
     session = sqlalchemy.orm.sessionmaker(bind=engine)
     sql_session = session()
 
-    # TODO: add user info to User table if its not already there
-    SoulDB.UserInfo.add_user(sql_session, SPOTIFY_USERNAME, SPOTIFY_USER_ID, SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET)
+    duplicate_user = sql_session.query(SoulDB.UserInfo).filter_by(spotify_id=SPOTIFY_USER_ID).first()
+    if duplicate_user is None:
+        SoulDB.UserInfo.add_user(sql_session, SPOTIFY_USERNAME, SPOTIFY_USER_ID, SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET)
 
     # if a search query is provided, download the track
     if SEARCH_QUERY:
