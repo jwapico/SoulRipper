@@ -50,8 +50,18 @@ class SpotifyUtils:
             offset += 50
 
         return all_playlists
+    
+    def get_playlist_info(self, playlist_id):
+        playlist_info = self.spotipy_client.playlist(playlist_id)
+        playlist_name = playlist_info["name"]
+        playlist_description = playlist_info["description"]
 
-    def get_all_playlist_tracks(self, playlist_id):
+        return {
+            "name": playlist_name,
+            "description": playlist_description,
+        }
+
+    def get_playlist_tracks(self, playlist_id):
         all_tracks = []
         offset = 0
 
@@ -91,3 +101,8 @@ class SpotifyUtils:
     
     def get_track(self, id):
         return self.spotipy_client.track(id)
+    
+    def get_user_info(self):
+        profile = self.spotipy_client.current_user()
+
+        return (profile["id"], profile["display_name"])

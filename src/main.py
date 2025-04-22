@@ -52,14 +52,7 @@ def main():
     SPOTIFY_REDIRECT_URI = os.getenv("SPOTIFY_REDIRECT_URI")
     spotify_utils = SpotifyUtils(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI,  spotify_scope="user-library-read playlist-modify-public")
     # spotify_utils = SpotifyUtils(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI)
-    
-    # if a search query is provided, download the track
-    if SEARCH_QUERY:
-        output_path = download_track(slskd_client, SEARCH_QUERY, OUTPUT_PATH)
-        # TODO: get metadata and insert into database
-        
-    if SPOTIFY_PLAYLIST_URL:
-        download_playlist(slskd_client, spotify_utils, SPOTIFY_PLAYLIST_URL, OUTPUT_PATH)
+    SPOTIFY_USER_ID, SPOTIFY_USERNAME = spotify_utils.get_user_info()
 
     # create the engine with the local soul.db file
     engine = sqla.create_engine("sqlite:///assets/soul.db", echo = True)
@@ -74,11 +67,22 @@ def main():
     session = sqlalchemy.orm.sessionmaker(bind=engine)
     sql_session = session()
 
+    # TODO: add user info to User table if its not already there
+    SoulDB.UserInfo.add_user(sql_session, SPOTIFY_USERNAME, SPOTIFY_USER_ID, SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET)
+
+    # if a search query is provided, download the track
+    if SEARCH_QUERY:
+        output_path = download_track(slskd_client, SEARCH_QUERY, OUTPUT_PATH)
+        # TODO: get metadata and insert into database
+        
+    if SPOTIFY_PLAYLIST_URL:
+        download_playlist(slskd_client, spotify_utils, sql_session, SPOTIFY_PLAYLIST_URL, OUTPUT_PATH)
+
     # add_tracks_from_music_dir("music", sql_session)
     # createAllPlaylists(spotify_utils, engine)
 
 # TODO: if no output path is provided use the name of the playlist in project dir
-def download_playlist(slskd_client, spotify_utils: SpotifyUtils, playlist_url: str, output_path: str):
+def download_playlist(slskd_client, spotify_utils: SpotifyUtils, sql_session, playlist_url: str, output_path: str):
     """
     Downloads a playlist from spotify
 
@@ -88,48 +92,62 @@ def download_playlist(slskd_client, spotify_utils: SpotifyUtils, playlist_url: s
     """
 
     playlist_id = spotify_utils.get_playlist_id_from_url(playlist_url)
-    playlist_tracks = spotify_utils.get_all_playlist_tracks(playlist_id)
+    playlist_tracks = spotify_utils.get_playlist_tracks(playlist_id)
+    playlist_info = spotify_utils.get_playlist_info(playlist_id)
 
+    # only create the playlist if it doesn't already exist
+    duplicate_playlist = sql_session.query(SoulDB.Playlists).filter_by(spotify_id=playlist_id).first()
+    if duplicate_playlist is None:
+        SoulDB.Playlists.add_playlist(sql_session, playlist_id, playlist_info["name"], playlist_info["description"])
+
+
+    output_path = os.path.join(output_path, playlist_info["name"])
+    os.makedirs(output_path, exist_ok=True)
+
+    # add each track to the Tracks database if it doesn't already exist
     for track in playlist_tracks:
+        spotify_id = track["track"]["id"]
         track_added_date = track["added_at"]
         explicit = track["track"]["explicit"]
-        track_name = track["track"]["name"]
-        artists = [artist["name"] for artist in track["track"]["artists"]]
+        title = track["track"]["name"]
+        artists = [(artist["name"], artist["id"]) for artist in track["track"]["artists"]]
         album = track["track"]["album"]["name"]
         release_date = track["track"]["album"]["release_date"]
-        # TODO: implement this function - need to also create table for liked songs (will be of type Playlist tho)
-        # date_liked = get_date_liked(track["track"]["id"])
+        date_liked = get_date_liked(track["track"]["id"])
+        filepath = download_track(slskd_client, f"{title} - {", ".join(artists)}", output_path)
 
-        filepath = download_track(slskd_client, track_name, output_path)
+        SoulDB.Tracks.add_track(sql_session, spotify_id, filepath, title, artists, album, release_date, explicit, date_liked, None)
 
-        # SoulDB.Tracks.add_track(sql_session, file)
+def createAllPlaylists(spotify_utils, engine):
+    all_playlists = spotify_utils.get_all_playlists()
+    save_json(all_playlists,"allPlaylists.json")
 
+    playlist_titles = []
+    first = True
+    for playlist in all_playlists:
+        
+        all_songs = spotify_utils.get_all_playlist_tracks(playlist["id"])
+        playlistName = playlist["name"]
+        if first == True: 
+            save_json(all_songs, f"allSongs{playlistName}")
+            save_json(spotify_utils.get_track(all_songs[0]['track']['id']), "Footage!")
+        playlist_titles.append(playlistName)
+        first = False
+    # SoulDB.createPlaylistTables(playlist_titles, engine)
 
+# TODO: implement this function - need to also create table for liked songs (will be of type Playlist tho)
+def get_date_liked(track_id: str) -> str:
+    """
+    Gets the date a track was liked from user spotify liked songs
 
+    Args:
+        track_id (str): the id of the track
 
+    Returns:
+        str: the date the track was liked
+    """
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-    # # get the playlist id from the url
-    # playlist_id = spotify_utils.get_playlist_id(playlist_url)
-    # all_songs = spotify_utils.get_all_playlist_tracks(playlist_id)
-
-    # for song in all_songs:
-    #     track_name = song["track"]["name"]
-    #     artist_name = song["track"]["artists"][0]["name"]
-    #     search_query = f"{track_name} {artist_name}"
-    #     download_track(slskd_client, search_query, output_path)
+    return None
 
 def extract_metadata(filepath: str) -> dict:
     """
@@ -156,6 +174,7 @@ def extract_metadata(filepath: str) -> dict:
         "length": int(audio.info.length) if audio.info else None,
     }
 
+# TODO: finish this function - need to add artists to Artists table
 def add_tracks_from_music_dir(music_dir: str, sql_session):
     """
     Adds all songs in the music directory to the database
@@ -167,6 +186,7 @@ def add_tracks_from_music_dir(music_dir: str, sql_session):
         for file in files:
             if file.endswith(".mp3") or file.endswith(".flac") or file.endswith(".wav"):
                 filepath = os.path.abspath(os.path.join(root, file))
+                # TODO: look at metadata to see what else we can extract - it's different for each file :(
                 file_metadata = extract_metadata(filepath)
                 title  = file_metadata.get("title")
                 artist = file_metadata.get("artist")
@@ -174,24 +194,7 @@ def add_tracks_from_music_dir(music_dir: str, sql_session):
                 genre  = file_metadata.get("genre")
                 date   = file_metadata.get("date")
                 length = file_metadata.get("length")
-                SoulDB.Tracks.add_track(sql_session, filepath, title, artist, date, None, None, None)
-
-def createAllPlaylists(spotify_utils, engine):
-    all_playlists = spotify_utils.get_all_playlists()
-    save_json(all_playlists,"allPlaylists.json")
-
-    playlist_titles = []
-    first = True
-    for playlist in all_playlists:
-        
-        all_songs = spotify_utils.get_all_playlist_tracks(playlist["id"])
-        playlistName = playlist["name"]
-        if first == True: 
-            save_json(all_songs, f"allSongs{playlistName}")
-            save_json(spotify_utils.get_track(all_songs[0]['track']['id']), "Footage!")
-        playlist_titles.append(playlistName)
-        first = False
-    # SoulDB.createPlaylistTables(playlist_titles, engine)
+                SoulDB.Tracks.add_track(sql_session, filepath, title, artist, album, date, None, None, None)
     
 def download_track(slskd_client, search_query: str, output_path: str) -> str:
     """
@@ -211,6 +214,7 @@ def download_track(slskd_client, search_query: str, output_path: str) -> str:
 
     return download_path
 
+# TODO: the output filename is wrong also ERROR HANDLING
 def download_track_slskd(slskd_client, search_query: str, output_path: str) -> str:       
     """
     Attempts to download a track from soulseek
@@ -228,6 +232,8 @@ def download_track_slskd(slskd_client, search_query: str, output_path: str) -> s
         highest_quality_file, highest_quality_file_user = select_best_search_candidate(search_results)
 
         print(f"Downloading {highest_quality_file['filename']} from user: {highest_quality_file_user}...")
+
+        # TODO: wrap this in a try except block and if it errors move on the next file - I think select_best_search_candidate needs to be refactored to return a list
         slskd_client.transfers.enqueue(highest_quality_file_user, [highest_quality_file])
 
         # for some reason enqueue doesn't give us the id of the download so we have to get it ourselves, the bool returned by enqueue is also not accurate. There may be a better way to do this but idc TODO
@@ -264,7 +270,10 @@ def download_track_slskd(slskd_client, search_query: str, output_path: str) -> s
             dest_path = os.path.join(f"{output_path}/{filename}")
             shutil.move(source_path, dest_path)
 
-        return dest_path
+            return dest_path
+        else:
+            print(f"Download failed: {download_state}")
+            return None
 
 def download_track_ytdlp(search_query: str, output_path: str) -> str :
     """
@@ -354,6 +363,11 @@ def select_best_search_candidate(search_results):
         for file in result["files"]:
             # this extracts the file extension
             match = re.search(r'\.([a-zA-Z0-9]+)$', file["filename"])
+
+            if match is None:
+                print(f"Skipping due to invalid file extension: {file['filename']}")
+                continue
+
             file_extension = match.group(1)
 
             if file_extension in ["flac", "mp3"] and result["fileCount"] > 0 and result["hasFreeUploadSlot"] == True:
