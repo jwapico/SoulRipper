@@ -15,9 +15,10 @@ from spotify_utils import SpotifyUtils
 import souldb as SoulDB
 
 # TODO:
-#   - better search for soulseek given song title and artist
-#   - create and sync database with spotify info
+#   - figure out how to link tracks to playlists
 #   - create and sync database with local music directory
+#   - create and sync database with spotify info
+#   - better search for soulseek given song title and artist
 #   - better user interface - gui or otherwise
 #       - some sort of config file for api keys, directory paths, etc
 #       - make cli better
@@ -67,6 +68,7 @@ def main():
     session = sqlalchemy.orm.sessionmaker(bind=engine)
     sql_session = session()
 
+    # add the user to the database if they don't already exist
     duplicate_user = sql_session.query(SoulDB.UserInfo).filter_by(spotify_id=SPOTIFY_USER_ID).first()
     if duplicate_user is None:
         SoulDB.UserInfo.add_user(sql_session, SPOTIFY_USERNAME, SPOTIFY_USER_ID, SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET)
@@ -75,7 +77,8 @@ def main():
     if SEARCH_QUERY:
         output_path = download_track(slskd_client, SEARCH_QUERY, OUTPUT_PATH)
         # TODO: get metadata and insert into database
-        
+    
+    # if a playlist url is provided, download the playlist
     if SPOTIFY_PLAYLIST_URL:
         download_playlist(slskd_client, spotify_utils, sql_session, SPOTIFY_PLAYLIST_URL, OUTPUT_PATH)
 

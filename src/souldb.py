@@ -9,7 +9,7 @@ from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
 
-# this table relates playlists to tracks
+# this table relates playlists to tracks - i think we need to append to it in either Playlists or Tracks like we are for track_artists in add_track
 playlist_tracks = sqla.Table(
     "playlist_tracks",
     Base.metadata,
