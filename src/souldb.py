@@ -9,40 +9,21 @@ from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
 
-# this table relates playlists to tracks - i think we need to append to it in either Playlists or Tracks like we are for track_artists in add_track
-playlist_tracks = sqla.Table(
-    "playlist_tracks",
-    Base.metadata,
-    sqla.Column("playlist_id", sqla.Integer, sqla.ForeignKey("playlists.id"), primary_key=True),
-    sqla.Column("track_id", sqla.Integer, sqla.ForeignKey("tracks.id"), primary_key=True),
-)
-
-# this table relates tracks to artists
-track_artists = sqla.Table(
-    "track_artists",
-    Base.metadata,
-    sqla.Column("track_id", sqla.Integer, sqla.ForeignKey("tracks.id"), primary_key=True),
-    sqla.Column("artist_id", sqla.Integer, sqla.ForeignKey("artists.id"), primary_key=True),
-)
-
+# table with info about every single track and file in the library 
 class Tracks(Base):
     __tablename__ = "tracks"
     id = sqla.Column(sqla.Integer, primary_key=True)
     spotify_id = sqla.Column(sqla.String, nullable=True, unique=True)
     filepath = sqla.Column(sqla.String, nullable=False)
     title = sqla.Column(sqla.String, nullable=False)
-    artist = sqla.orm.relationship("Artist", secondary=track_artists, backref="tracks")
+    track_artists = sqla.orm.relationship("TrackArtist", back_populates="track", cascade="all, delete-orphan")
+    artists = sqla.orm.relationship("Artist", secondary="track_artists", viewonly=True)
     album = sqla.Column(sqla.String, nullable=True)
     release_date = sqla.Column(sqla.String, nullable=True)
     explicit = sqla.Column(sqla.Boolean, nullable=True)
     date_liked = sqla.Column(sqla.String, nullable=True)
     comments = sqla.Column(sqla.String, nullable=True)
-    playlists = sqla.orm.relationship(
-        "Playlists",
-        secondary=playlist_tracks,
-        back_populates="tracks",
-        lazy="joined",
-    )
+    playlist_tracks = sqla.orm.relationship("PlaylistTracks", back_populates="track", cascade="all, delete-orphan")
 
     @classmethod
     def add_track(cls, session, spotify_id, filepath, title, artists, album, release_date, explicit, date_liked, comments):
@@ -57,45 +38,76 @@ class Tracks(Base):
             comments=comments
         )
 
-        # add artists to the Artist table if they don't already exist, and associate them to the track
-        for name, spotify_id in artists:
-            existing_artist = session.query(Artist).filter_by(name=name).first()
-
-            if existing_artist is None:
-                new_artist = Artist(name=name, spotify_id=spotify_id)
-                session.add(new_artist)
-                track.artist.append(new_artist)
-
         session.add(track)
+        session.flush()
+
+        # add artists to the Artist table if they don't already exist, and add them to the TrackArtist association table
+        for name, spotify_id in artists:
+            artist = session.query(Artist).filter_by(name=name).first()
+
+            if artist is None:
+                artist = Artist(name=name, spotify_id=spotify_id)
+                session.add(artist)
+                session.flush()
+
+            track_artist_assoc = TrackArtist(track_id=track.id, artist_id=artist.id)
+            session.add(track_artist_assoc)
+
         session.commit()
 
-class Artist(Base):
-    __tablename__ = "artists"
-    id = sqla.Column(sqla.Integer, primary_key=True)
-    spotify_id = sqla.Column(sqla.String, nullable=True, unique=True)
-    name = sqla.Column(sqla.String, nullable=False, unique=True)
-
+# table with info about every single playlist in the library
 class Playlists(Base):
     __tablename__ = "playlists"
     id = sqla.Column(sqla.Integer, primary_key=True)
     spotify_id = sqla.Column(sqla.String, nullable=False, unique=True)
     name = sqla.Column(sqla.String, nullable=False)
     description = sqla.Column(sqla.String, nullable=True)
-    tracks = sqla.orm.relationship(
-        "Tracks",
-        secondary=playlist_tracks,
-        back_populates="playlists",
-        lazy="joined",
-    )
+    playlist_tracks = sqla.orm.relationship("PlaylistTracks", back_populates="playlist", cascade="all, delete-orphan")
 
     @classmethod
-    def add_playlist(cls, session, spotify_id, name, description):
+    def add_playlist(cls, session, spotify_id, name, description, track_info):
         new_playlist = cls(spotify_id=spotify_id, name=name, description=description)
+
+        # get track objects for each id and add them with their date_added to the playlist_tracks association table
+        tracks = session.query(Tracks).filter(Tracks.spotify_id.in_([track[0] for track in track_info])).all()
+        track_map = {track.spotify_id: track for track in tracks}
+        for spotify_id, date_added in track_info:
+            track = track_map.get(spotify_id)
+            if track:
+                assoc = PlaylistTracks(track=track, added_at=date_added)
+                new_playlist.playlist_tracks.append(assoc)
+
         session.add(new_playlist)
         session.commit()
 
-# TODO: idk what should go here, or what the 3rd table should even include
-# 	- maybe we should create a table for genres, though we could also just treat genres as playlists
+# association table that creates a many-to-many relationship between playlists and tracks with extra attributes
+class PlaylistTracks(Base):
+    __tablename__ = "playlist_tracks"
+    id = sqla.Column(sqla.Integer, primary_key=True, autoincrement=True)
+    playlist_id = sqla.Column(sqla.Integer, sqla.ForeignKey("playlists.id"), nullable=False)
+    track_id = sqla.Column(sqla.Integer, sqla.ForeignKey("tracks.id"), nullable=False)
+    added_at = sqla.Column(sqla.String, nullable=False)
+    playlist = sqla.orm.relationship("Playlists", back_populates="playlist_tracks")
+    track = sqla.orm.relationship("Tracks", back_populates="playlist_tracks")
+
+# table with info about every single artist in the library
+class Artist(Base):
+    __tablename__ = "artists"
+    id = sqla.Column(sqla.Integer, primary_key=True)
+    spotify_id = sqla.Column(sqla.String, nullable=True, unique=True)
+    name = sqla.Column(sqla.String, nullable=False, unique=True)
+    track_artists = sqla.orm.relationship("TrackArtist", back_populates="artist", cascade="all, delete-orphan")
+
+# association table that creates a simple many-to-many relationship between tracks and artists
+class TrackArtist(Base):
+    __tablename__ = "track_artists"
+    id = sqla.Column(sqla.Integer, primary_key=True, autoincrement=True)
+    track_id = sqla.Column(sqla.Integer, sqla.ForeignKey("tracks.id"), nullable=False)
+    artist_id = sqla.Column(sqla.Integer, sqla.ForeignKey("artists.id"), nullable=False)
+    track = sqla.orm.relationship("Tracks", back_populates="track_artists")
+    artist = sqla.orm.relationship("Artist", back_populates="track_artists")
+
+# table with info the user
 class UserInfo(Base):
     __tablename__ = "user_info"
     id = sqla.Column(sqla.Integer, primary_key=True)

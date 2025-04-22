@@ -69,8 +69,8 @@ def main():
     sql_session = session()
 
     # add the user to the database if they don't already exist
-    duplicate_user = sql_session.query(SoulDB.UserInfo).filter_by(spotify_id=SPOTIFY_USER_ID).first()
-    if duplicate_user is None:
+    existing_user = sql_session.query(SoulDB.UserInfo).filter_by(spotify_id=SPOTIFY_USER_ID).first()
+    if existing_user is None:
         SoulDB.UserInfo.add_user(sql_session, SPOTIFY_USERNAME, SPOTIFY_USER_ID, SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET)
 
     # if a search query is provided, download the track
@@ -98,15 +98,11 @@ def download_playlist(slskd_client, spotify_utils: SpotifyUtils, sql_session, pl
     playlist_tracks = spotify_utils.get_playlist_tracks(playlist_id)
     playlist_info = spotify_utils.get_playlist_info(playlist_id)
 
-    # only create the playlist if it doesn't already exist
-    duplicate_playlist = sql_session.query(SoulDB.Playlists).filter_by(spotify_id=playlist_id).first()
-    if duplicate_playlist is None:
-        SoulDB.Playlists.add_playlist(sql_session, playlist_id, playlist_info["name"], playlist_info["description"])
-
     output_path = os.path.join(output_path, playlist_info["name"])
     os.makedirs(output_path, exist_ok=True)
 
     # add each track to the Tracks database if it doesn't already exist
+    tracks_info = []
     for track in playlist_tracks:
         spotify_id = track["track"]["id"]
         track_added_date = track["added_at"]
@@ -116,26 +112,12 @@ def download_playlist(slskd_client, spotify_utils: SpotifyUtils, sql_session, pl
         album = track["track"]["album"]["name"]
         release_date = track["track"]["album"]["release_date"]
         date_liked = get_date_liked(track["track"]["id"])
-        filepath = download_track(slskd_client, f"{title} - {", ".join(artists)}", output_path)
+        filepath = download_track(slskd_client, f"{title} - {', '.join([artist[0] for artist in artists])}", output_path)
 
         SoulDB.Tracks.add_track(sql_session, spotify_id, filepath, title, artists, album, release_date, explicit, date_liked, None)
+        tracks_info.append((spotify_id, track_added_date))
 
-def createAllPlaylists(spotify_utils, engine):
-    all_playlists = spotify_utils.get_all_playlists()
-    save_json(all_playlists,"allPlaylists.json")
-
-    playlist_titles = []
-    first = True
-    for playlist in all_playlists:
-        
-        all_songs = spotify_utils.get_all_playlist_tracks(playlist["id"])
-        playlistName = playlist["name"]
-        if first == True: 
-            save_json(all_songs, f"allSongs{playlistName}")
-            save_json(spotify_utils.get_track(all_songs[0]['track']['id']), "Footage!")
-        playlist_titles.append(playlistName)
-        first = False
-    # SoulDB.createPlaylistTables(playlist_titles, engine)
+    SoulDB.Playlists.add_playlist(sql_session, playlist_id, playlist_info["name"], playlist_info["description"], tracks_info)
 
 # TODO: implement this function - need to also create table for liked songs (will be of type Playlist tho)
 def get_date_liked(track_id: str) -> str:
@@ -388,6 +370,23 @@ def pprint(data):
 def save_json(data, filepath="debug.json"):
     with open(filepath, "w") as file:
         json.dump(data, file)
+
+def createAllPlaylists(spotify_utils, engine):
+    all_playlists = spotify_utils.get_all_playlists()
+    save_json(all_playlists,"allPlaylists.json")
+
+    playlist_titles = []
+    first = True
+    for playlist in all_playlists:
+        
+        all_songs = spotify_utils.get_all_playlist_tracks(playlist["id"])
+        playlistName = playlist["name"]
+        if first == True: 
+            save_json(all_songs, f"allSongs{playlistName}")
+            save_json(spotify_utils.get_track(all_songs[0]['track']['id']), "Footage!")
+        playlist_titles.append(playlistName)
+        first = False
+    # SoulDB.createPlaylistTables(playlist_titles, engine)
 
 if __name__ == "__main__":
     main()
