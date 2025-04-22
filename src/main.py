@@ -7,13 +7,12 @@ import json
 import argparse
 import dotenv
 import shutil
-import sqlalchemy as sql
-from sqlalchemy.orm import declarative_base, sessionmaker
+import sqlalchemy as sqla
+import sqlalchemy.orm
 import mutagen
 
-from spotify_client import SpotifyClient
+from spotify_utils import SpotifyUtils
 import souldb as SoulDB
-from souldb import Base
 
 # TODO:
 #   - better search for soulseek given song title and artist
@@ -22,6 +21,12 @@ from souldb import Base
 #   - better user interface - gui or otherwise
 #       - some sort of config file for api keys, directory paths, etc
 #       - make cli better
+#   - error handling in download functions and probably other places
+#   - restructure this file - there are too many random ahh functions
+#       - maybe incapsulate into class or just make a utils file
+#           - shared variables so we dont have to pass shi around so much
+#   - create a TODO.md file for project management and big plans outside of databases final project (due apr 30 :o)
+#       - talk to colton eoghan and other potential users about high level design
 
 def main():
     # collect commandline arguments
@@ -45,33 +50,86 @@ def main():
     SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
     SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
     SPOTIFY_REDIRECT_URI = os.getenv("SPOTIFY_REDIRECT_URI")
-    # spotify_client = SpotifyClient(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI, spotify_scope="user-library-read playlist-modify-public")
-    spotify_client = SpotifyClient(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI)
+    spotify_utils = SpotifyUtils(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI,  spotify_scope="user-library-read playlist-modify-public")
+    # spotify_utils = SpotifyUtils(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI)
     
     # if a search query is provided, download the track
     if SEARCH_QUERY:
         output_path = download_track(slskd_client, SEARCH_QUERY, OUTPUT_PATH)
-        # TODO: insert info into database
+        # TODO: get metadata and insert into database
         
     if SPOTIFY_PLAYLIST_URL:
-        # TODO something
-        pass
+        download_playlist(slskd_client, spotify_utils, SPOTIFY_PLAYLIST_URL, OUTPUT_PATH)
 
     # create the engine with the local soul.db file
-    engine = sql.create_engine("sqlite:///assets/soul.db", echo = True)
+    engine = sqla.create_engine("sqlite:///assets/soul.db", echo = True)
 
     # drop everything in the database
-    metadata = sql.MetaData()
+    metadata = sqla.MetaData()
     metadata.reflect(bind=engine)
     metadata.drop_all(engine)
 
-    # create the tables defined in souldb.py and create a session
+    # initialize the tables defined in souldb.py and create a session
     SoulDB.Base.metadata.create_all(engine)
-    Session = sessionmaker(bind=engine)
-    db_session = Session()
+    session = sqlalchemy.orm.sessionmaker(bind=engine)
+    sql_session = session()
 
-    add_tracks_from_music_dir("music", db_session)
-    createAllPlaylists(spotify_client, engine)
+    # add_tracks_from_music_dir("music", sql_session)
+    # createAllPlaylists(spotify_utils, engine)
+
+# TODO: if no output path is provided use the name of the playlist in project dir
+def download_playlist(slskd_client, spotify_utils: SpotifyUtils, playlist_url: str, output_path: str):
+    """
+    Downloads a playlist from spotify
+
+    Args:
+        playlist_url (str): the url of the playlist
+        output_path (str): the directory to download the songs to
+    """
+
+    playlist_id = spotify_utils.get_playlist_id_from_url(playlist_url)
+    playlist_tracks = spotify_utils.get_all_playlist_tracks(playlist_id)
+
+    for track in playlist_tracks:
+        track_added_date = track["added_at"]
+        explicit = track["track"]["explicit"]
+        track_name = track["track"]["name"]
+        artists = [artist["name"] for artist in track["track"]["artists"]]
+        album = track["track"]["album"]["name"]
+        release_date = track["track"]["album"]["release_date"]
+        # TODO: implement this function - need to also create table for liked songs (will be of type Playlist tho)
+        # date_liked = get_date_liked(track["track"]["id"])
+
+        filepath = download_track(slskd_client, track_name, output_path)
+
+        # SoulDB.Tracks.add_track(sql_session, file)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    # # get the playlist id from the url
+    # playlist_id = spotify_utils.get_playlist_id(playlist_url)
+    # all_songs = spotify_utils.get_all_playlist_tracks(playlist_id)
+
+    # for song in all_songs:
+    #     track_name = song["track"]["name"]
+    #     artist_name = song["track"]["artists"][0]["name"]
+    #     search_query = f"{track_name} {artist_name}"
+    #     download_track(slskd_client, search_query, output_path)
 
 def extract_metadata(filepath: str) -> dict:
     """
@@ -98,7 +156,7 @@ def extract_metadata(filepath: str) -> dict:
         "length": int(audio.info.length) if audio.info else None,
     }
 
-def add_tracks_from_music_dir(music_dir: str, db_session):
+def add_tracks_from_music_dir(music_dir: str, sql_session):
     """
     Adds all songs in the music directory to the database
 
@@ -116,21 +174,21 @@ def add_tracks_from_music_dir(music_dir: str, db_session):
                 genre  = file_metadata.get("genre")
                 date   = file_metadata.get("date")
                 length = file_metadata.get("length")
-                SoulDB.Tracks.add_track(db_session, filepath, title, artist, date, None, None, None)
+                SoulDB.Tracks.add_track(sql_session, filepath, title, artist, date, None, None, None)
 
-def createAllPlaylists(spotify_client, engine):
-    all_playlists = spotify_client.get_all_playlists()
+def createAllPlaylists(spotify_utils, engine):
+    all_playlists = spotify_utils.get_all_playlists()
     save_json(all_playlists,"allPlaylists.json")
 
     playlist_titles = []
     first = True
     for playlist in all_playlists:
         
-        all_songs = spotify_client.get_all_playlist_tracks(playlist["id"])
+        all_songs = spotify_utils.get_all_playlist_tracks(playlist["id"])
         playlistName = playlist["name"]
         if first == True: 
             save_json(all_songs, f"allSongs{playlistName}")
-            save_json(spotify_client.get_track(all_songs[0]['track']['id']), "Footage!")
+            save_json(spotify_utils.get_track(all_songs[0]['track']['id']), "Footage!")
         playlist_titles.append(playlistName)
         first = False
     # SoulDB.createPlaylistTables(playlist_titles, engine)

@@ -9,30 +9,13 @@ from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
 
-def createPlaylistTables(playlists, engine):
-    # dropAllPlaylists(playlists, engine)
-    playlistTables = []
-    for playlist in playlists:
-        attr_dict = {'__tablename__': playlist, 'song_id': sql.Column(sql.Integer, primary_key=True)}
-        playlistTables.append(type(playlist, (Base,), attr_dict))
-    Base.metadata.create_all(bind=engine)
-
-def dropAllPlaylists(playlists, engine):
-    metadata = sql.MetaData()
-    metadata.reflect(bind=engine)
-    tables_to_drop = []
-    for playlist in playlists:
-        table_to_drop = metadata.tables.get(playlist)
-        if table_to_drop is not None:
-            tables_to_drop.append(table_to_drop)
-    Base.metadata.drop_all(engine, tables_to_drop, checkfirst=True)
-
 class Tracks(Base):
     __tablename__ = "tracks"
     id = sql.Column(sql.Integer, primary_key=True)
     filepath = sql.Column(sql.String, nullable=False)
     title = sql.Column(sql.String, nullable=False)
     artist = sql.Column(sql.String, nullable=False)
+    album = sql.Column(sql.String, nullable=True)
     release_date = sql.Column(sql.String, nullable=True)
     explicit = sql.Column(sql.Boolean, nullable=True)
     date_liked = sql.Column(sql.String, nullable=True)
@@ -71,3 +54,21 @@ class UserInfo(Base):
         new_user = cls(username=username, spotify_client_id=spotify_client_id, spotify_client_secret=spotify_client_secret)
         session.add(new_user)
         session.commit()
+
+def createPlaylistTables(playlists, engine):
+    # dropAllPlaylists(playlists, engine)
+    playlistTables = []
+    for playlist in playlists:
+        attr_dict = {'__tablename__': playlist, 'song_id': sql.Column(sql.Integer, primary_key=True)}
+        playlistTables.append(type(playlist, (Base,), attr_dict))
+    Base.metadata.create_all(bind=engine)
+
+def dropAllPlaylists(playlists, engine):
+    metadata = sql.MetaData()
+    metadata.reflect(bind=engine)
+    tables_to_drop = []
+    for playlist in playlists:
+        table_to_drop = metadata.tables.get(playlist)
+        if table_to_drop is not None:
+            tables_to_drop.append(table_to_drop)
+    Base.metadata.drop_all(engine, tables_to_drop, checkfirst=True)

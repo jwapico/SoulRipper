@@ -3,13 +3,13 @@ from spotipy.oauth2 import SpotifyOAuth
 from dotenv import load_dotenv
 import re
 
-class SpotifyClient:
+class SpotifyUtils:
     CLIENT_ID: str
     CLIENT_SECRET: str
     REDIRECT_URI: str
     SPOTIFY_SCOPE: str
     USER_ID: None
-    spotipy_client: None
+    spotipy_client: spotipy.Spotify
 
     def __init__(self, client_id, client_secret, redirect_uri, spotify_scope="user-library-read user-read-private playlist-read-collaborative playlist-read-private"):
         self.CLIENT_ID = client_id
@@ -56,7 +56,7 @@ class SpotifyClient:
         offset = 0
 
         while True:
-            response = self.spotipy_client.playlist_items(playlist_id=playlist_id, offset=offset)
+            response = self.spotipy_client.playlist_items(offset=offset, playlist_id=playlist_id)
             all_tracks.extend(response["items"])
             offset += 100
 
@@ -65,7 +65,7 @@ class SpotifyClient:
             
         return all_tracks
 
-    def get_playlist_from_url(self, playlist_url: str):
+    def get_playlist_id_from_url(self, playlist_url: str):
         match = re.search(r"playlist/([a-zA-Z0-9]+)", playlist_url)
             
         if not match:
@@ -73,7 +73,7 @@ class SpotifyClient:
         
         playlist_id = match.group(1)
 
-        return self.spotipy_client.playlist(playlist_id)
+        return playlist_id
     
     def get_liked_songs(self):
         all_tracks = []
