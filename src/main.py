@@ -28,6 +28,7 @@ import souldb as SoulDB
 #           - shared variables so we dont have to pass shi around so much
 #   - create a TODO.md file for project management and big plans outside of databases final project (due apr 30 :o)
 #       - talk to colton eoghan and other potential users about high level design
+#   - parallelize downloads
 
 def main():
     # collect commandline arguments
@@ -229,7 +230,7 @@ def download_track_slskd(slskd_client, search_query: str, output_path: str) -> s
 
         # python src/main.py --search-query "Arya (With Nigo) - Nigo, A$AP Rocky"
         if len(new_download["directories"]) > 1 or len(new_download["directories"][0]["files"]) > 1:
-            raise Exception(f"bug: more than one file candidate in new_download: \n\n{pprint(new_download)}")
+            print(f"bug: more than one file candidate in new_download: \n\n{pprint(new_download)}")
 
         directory = new_download["directories"][0]
         file = directory["files"][0]

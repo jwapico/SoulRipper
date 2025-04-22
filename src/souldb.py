@@ -51,7 +51,7 @@ class Tracks(Base):
                 session.flush()
 
             track_artist_assoc = TrackArtist(track_id=track.id, artist_id=artist.id)
-            session.add(track_artist_assoc)
+            track.track_artists.append(track_artist_assoc)
 
         session.commit()
 
@@ -74,8 +74,8 @@ class Playlists(Base):
         for spotify_id, date_added in track_info:
             track = track_map.get(spotify_id)
             if track:
-                assoc = PlaylistTracks(track=track, added_at=date_added)
-                new_playlist.playlist_tracks.append(assoc)
+                playlist_track_assoc = PlaylistTracks(track=track, added_at=date_added)
+                new_playlist.playlist_tracks.append(playlist_track_assoc)
 
         session.add(new_playlist)
         session.commit()
