@@ -183,6 +183,5 @@ assets/slskd.yml
 *.mp3
 *.webp
 *.flac
-.vscode/*
 *.json
 assets/soul.db
