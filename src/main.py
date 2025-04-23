@@ -32,6 +32,7 @@ import souldb as SoulDB
 
 def main():
     # collect commandline arguments
+    # TODO: add --max-retries argument
     parser = argparse.ArgumentParser(description="")
     parser.add_argument("pos_output_path", nargs="?", default=os.getcwd(), help="The output directory in which your files will be downloaded")
     parser.add_argument("--output-path", dest="output_path", help="The output directory in which your files will be downloaded")
@@ -57,9 +58,9 @@ def main():
     SPOTIFY_USER_ID, SPOTIFY_USERNAME = spotify_utils.get_user_info()
 
     # create the engine with the local soul.db file
-    engine = sqla.create_engine("sqlite:///assets/soul.db", echo = True)
+    engine = sqla.create_engine("sqlite:///assets/soul.db", echo = False)
 
-    # drop everything in the database
+    # drop everything in the database for debugging
     metadata = sqla.MetaData()
     metadata.reflect(bind=engine)
     metadata.drop_all(engine)
@@ -200,7 +201,7 @@ def download_track(slskd_client, search_query: str, output_path: str) -> str:
     return download_path
 
 # TODO: the output filename is wrong also ERROR HANDLING
-def download_track_slskd(slskd_client, search_query: str, output_path: str) -> str:       
+def download_track_slskd(slskd_client, search_query: str, output_path: str, max_retries=5) -> str:       
     """
     Attempts to download a track from soulseek
 
@@ -212,53 +213,208 @@ def download_track_slskd(slskd_client, search_query: str, output_path: str) -> s
         str|None: the path to the downloaded song or None of the download was unsuccessful
     """
 
+    # search slskd for the track and filter the results if there are any
     search_results = search_slskd(slskd_client, search_query)
-    if search_results:
-        highest_quality_file, highest_quality_file_user = select_best_search_candidate(search_results)
+    if search_results is None:
+        print("No results found on Soulseek")
+        return None
 
-        print(f"Downloading {highest_quality_file['filename']} from user: {highest_quality_file_user}...")
+    relevant_results = filter_search_results(search_results)
+    if relevant_results is None:
+        print("No relevant results found on Soulseek")
+        return None
+    
+    # attempt to download the track from slskd
+    download_result = attempt_downloads(slskd_client, relevant_results, max_retries)
+    if download_result is None:
+        print("Unable to download track from Soulseek")
+        return None
 
-        # TODO: wrap this in a try except block and if it errors move on the next file - I think select_best_search_candidate needs to be refactored to return a list
-        slskd_client.transfers.enqueue(highest_quality_file_user, [highest_quality_file])
+    download_user, file_data, file_id, download_info = download_result
+    download, download_dir, download_file = get_slskd_download_from_file_id(slskd_client, file_id)
 
-        # for some reason enqueue doesn't give us the id of the download so we have to get it ourselves, the bool returned by enqueue is also not accurate. There may be a better way to do this but idc TODO
-        for download in slskd_client.transfers.get_all_downloads():
-            for directory in download["directories"]:
-                for file in directory["files"]:
-                    if file["filename"] == highest_quality_file["filename"]:
-                        new_download = download
+    # wait for the download to be completed
+    # TODO: refactor this whole block of code to analyze the download object and get the state from there
+    download_state = slskd_client.transfers.get_download(download_user, file_id)["state"]
+    num_retries = 0
+    while not "Completed" in download_state:
+        if num_retries > 120:
+            print("download took longer than 2 minutes - skipping - this is only for debugging and we need to look at the downloads status")
+            break
 
-        # python src/main.py --search-query "Arya (With Nigo) - Nigo, A$AP Rocky"
-        if len(new_download["directories"]) > 1 or len(new_download["directories"][0]["files"]) > 1:
-            print(f"bug: more than one file candidate in new_download: \n\n{pprint(new_download)}")
-
-        directory = new_download["directories"][0]
-        file = directory["files"][0]
-        download_id = file["id"]
-
-        # wait for the download to be completed
-        download_state = slskd_client.transfers.get_download(highest_quality_file_user, download_id)["state"]
-        while not "Completed" in download_state:
-            print(download_state)
-            time.sleep(1)
-            download_state = slskd_client.transfers.get_download(highest_quality_file_user, download_id)["state"]
-
-        # TODO: if the download failed, retry from a different user, maybe next highest quality file. add max_retries arg to specify max number of retries before returning None
+        download_state = slskd_client.transfers.get_download(download_user, file_id)["state"]
         print(download_state)
+        time.sleep(1)
+        num_retries += 1
 
-        # this moves the file from where it was downloaded to the specified output path
-        if download_state == "Completed, Succeeded":
-            containing_dir_name = os.path.basename(directory["directory"].replace("\\", "/"))
-            filename = os.path.basename(file["filename"].replace("\\", "/"))
+    # this moves the file from where it was downloaded to the specified output path
+    if download_state == "Completed, Succeeded":
+        containing_dir_name = os.path.basename(download_dir["directory"].replace("\\", "/"))
+        filename = os.path.basename(download_file["filename"].replace("\\", "/"))
 
-            source_path = os.path.join(f"assets/downloads/{containing_dir_name}/{filename}")
-            dest_path = os.path.join(f"{output_path}/{filename}")
-            shutil.move(source_path, dest_path)
+        source_path = os.path.join(f"assets/downloads/{containing_dir_name}/{filename}")
+        dest_path = os.path.join(f"{output_path}/{filename}")
 
-            return dest_path
-        else:
-            print(f"Download failed: {download_state}")
+        if not os.path.exists(source_path):
+            print(f"ERROR: slskd download state is 'Completed, Succeeded' but the file was not found: {source_path}")
             return None
+
+        shutil.move(source_path, dest_path)
+        return dest_path
+    else:
+        print(f"Download failed: {download_state}")
+        return None
+
+
+    # highest_quality_file, highest_quality_file_user = relevant_results[0]
+
+    # print(f"Downloading {highest_quality_file['filename']} from user: {highest_quality_file_user}...")
+
+    # # TODO: wrap this in a try except block and if it errors move on the next file - I think select_best_search_candidate needs to be refactored to return a list
+    # try:
+    #     slskd_client.transfers.enqueue(highest_quality_file_user, [highest_quality_file])
+    # except Exception as e:
+    #     print(f"Error when downloading the track from slskd: {e}")
+    #     # TODO: maybe retry with next user or file
+    #     return None
+
+    # # for some reason enqueue doesn't give us the id of the download so we have to get it ourselves, the bool returned by enqueue is also not accurate. There may be a better way to do this but idc TODO
+    # for download in slskd_client.transfers.get_all_downloads():
+    #     for directory in download["directories"]:
+    #         for file in directory["files"]:
+    #             if file["filename"] == highest_quality_file["filename"]:
+    #                 new_download = download
+
+    # # python src/main.py --search-query "Arya (With Nigo) - Nigo, A$AP Rocky"
+    # if len(new_download["directories"]) > 1 or len(new_download["directories"][0]["files"]) > 1:
+    #     print(f"bug: more than one file candidate in new_download: \n\n{pprint(new_download)}")
+
+    # directory = new_download["directories"][0]
+    # file = directory["files"][0]
+    # download_id = file["id"]
+
+    # # wait for the download to be completed
+    # download_state = slskd_client.transfers.get_download(highest_quality_file_user, download_id)["state"]
+    # while not "Completed" in download_state:
+    #     print(download_state)
+    #     time.sleep(1)
+    #     download_state = slskd_client.transfers.get_download(highest_quality_file_user, download_id)["state"]
+
+    # # TODO: if the download failed, retry from a different user, maybe next highest quality file. add max_retries arg to specify max number of retries before returning None
+    # print(download_state)
+
+    # # this moves the file from where it was downloaded to the specified output path
+    # if download_state == "Completed, Succeeded":
+    #     containing_dir_name = os.path.basename(directory["directory"].replace("\\", "/"))
+    #     filename = os.path.basename(file["filename"].replace("\\", "/"))
+
+    #     source_path = os.path.join(f"assets/downloads/{containing_dir_name}/{filename}")
+    #     dest_path = os.path.join(f"{output_path}/{filename}")
+
+    #     if not os.path.exists(source_path):
+    #         print(f"ERROR: slskd download state is 'Completed, Succeeded' but the file was not found: {source_path}")
+    #         return None
+
+    #     shutil.move(source_path, dest_path)
+    #     return dest_path
+    # else:
+    #     print(f"Download failed: {download_state}")
+    #     return None
+
+# TODO: the print statements in these lower level functions should be changed to logging/debug statements but idk how to do that and dc rn 
+
+def attempt_downloads(slskd_client, search_results, max_retries):
+    for attempt_count, (file_data, file_user) in enumerate(search_results):
+        if attempt_count > max_retries:
+            print(f"Max retries ({max_retries}) reached for your query")
+            return (None, None, None)
+        
+        try:
+            print(f"Attempting to download {file_data['filename']} from user: {file_user}...")
+            slskd_client.transfers.enqueue(file_user, [file_data])
+        except Exception as e:
+            print(f"Error during transfer: {e}")
+            continue
+
+        download_info, file_id = get_slskd_download_from_filename(slskd_client, file_data["filename"])
+
+        if download_info is None:
+            print(f"Error: could not find download for '{file_data['filename']}' from user '{file_user}'")
+        
+        return (file_user, file_data, file_id, download_info)
+
+def get_slskd_download_from_filename(slskd_client, filename):
+    """
+    Gets the download object for a file from slskd
+
+    Args:
+        slskd_client: the slskd client
+        file_data: slskd file data from the search results
+    
+    Returns:
+        download: the download data for the file
+    """
+
+    for download in slskd_client.transfers.get_all_downloads():
+        for directory in download["directories"]:
+            for file in directory["files"]:
+                if file["filename"] == filename:
+                    return (download, file["id"])
+
+def get_slskd_download_from_file_id(slskd_client, file_id):
+    """
+    Gets the download object for a file from slskd
+
+    Args:
+        slskd_client: the slskd client
+        file_id: the id of the file
+    
+    Returns:
+        download: the download data for the file
+    """
+
+    for download in slskd_client.transfers.get_all_downloads():
+        for directory in download["directories"]:
+            for file in directory["files"]:
+                if file["id"] == file_id:
+                    return (download, directory, file)
+    for download in slskd_client.transfers.get_all_downloads():
+        for directory in download["directories"]:
+            for file in directory["files"]:
+                if file["id"] == file_id:
+                    return (download, directory, file)
+
+def filter_search_results(search_results):
+    """
+    Filters the search results to only include downloadable mp3 and flac files sorted by size
+
+    Args:
+        search_results: search responses in the format of slskd.searches.search_responses()
+    
+    Returns:
+        List((highest_quality_file, highest_quality_file_user: str)): The file data for the best candidate, and the username of its owner
+    """
+
+    relevant_results = []
+
+    for result in search_results:
+        for file in result["files"]:
+            # this extracts the file extension
+            match = re.search(r'\.([a-zA-Z0-9]+)$', file["filename"])
+
+            if match is None:
+                print(f"Skipping due to invalid file extension: {file['filename']}")
+                continue
+
+            file_extension = match.group(1)
+
+            if file_extension in ["flac", "mp3"] and result["fileCount"] > 0 and result["hasFreeUploadSlot"] == True:
+                relevant_results.append((file, result["username"]))
+            
+    relevant_results.sort(key=lambda candidate : candidate[0]["size"], reverse=True)
+
+    # return highest_quality_file, highest_quality_file_user
+    return relevant_results
 
 def download_track_ytdlp(search_query: str, output_path: str) -> str :
     """
@@ -306,6 +462,7 @@ def download_track_ytdlp(search_query: str, output_path: str) -> str :
 
     return download_path
 
+# TODO: cleanup printing and better searching - need to extract artist and title from search data
 def search_slskd(slskd_client, search_query: str) -> list:
     """
     Searches for a track on soulseek
@@ -328,42 +485,6 @@ def search_slskd(slskd_client, search_query: str) -> list:
     print(f"Found {len(results)} results")
 
     return results
-
-def select_best_search_candidate(search_results):
-    """
-    Returns the search result with the highest quality flac or mp3 file.
-
-    Args:
-        search_results: search responses in the format of slskd.searches.search_responses()
-    
-    Returns:
-        (highest_quality_file, highest_quality_file_user: str): The file data for the best candidate, and the username of its owner
-    """
-
-    relevant_results = []
-    highest_quality_file = {"size": 0}
-    highest_quality_file_user = ""
-
-    for result in search_results:
-        for file in result["files"]:
-            # this extracts the file extension
-            match = re.search(r'\.([a-zA-Z0-9]+)$', file["filename"])
-
-            if match is None:
-                print(f"Skipping due to invalid file extension: {file['filename']}")
-                continue
-
-            file_extension = match.group(1)
-
-            if file_extension in ["flac", "mp3"] and result["fileCount"] > 0 and result["hasFreeUploadSlot"] == True:
-                relevant_results.append(result)
-            
-                # TODO: may want a more sophisticated way of selecting the best file in the future
-                if file["size"] > highest_quality_file["size"]:
-                    highest_quality_file = file
-                    highest_quality_file_user = result["username"]
-
-    return highest_quality_file, highest_quality_file_user
 
 def pprint(data):
     print(json.dumps(data, indent=4))

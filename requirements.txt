@@ -4,3 +4,4 @@ yt-dlp
 spotipy
 sqlalchemy
 mutagen
+keyboard
