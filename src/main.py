@@ -60,20 +60,18 @@ def main():
     SPOTIFY_USER_ID, SPOTIFY_USERNAME = spotify_client.get_user_info()
 
     # create the engine with the local soul.db file
-    engine = sqla.create_engine("sqlite:///assets/soul.db", echo = True)
+    engine = sqla.create_engine("sqlite:///assets/soul.db", echo = False)
 
     # drop everything in the database for debugging
-    metadata = sqla.MetaData()
-    metadata.reflect(bind=engine)
-    metadata.drop_all(engine)
+    # metadata = sqla.MetaData()
+    # metadata.reflect(bind=engine)
+    # metadata.drop_all(engine)
 
     # initialize the tables defined in souldb.py and create a session
     SoulDB.Base.metadata.create_all(engine)
     session = sqlalchemy.orm.sessionmaker(bind=engine)
     sql_session = session()
     
-    add_tracks_from_music_dir("music", sql_session)
-    createAllPlaylists(spotify_client, engine, sql_session)
 
     # add the user to the database if they don't already exist
     existing_user = sql_session.query(SoulDB.UserInfo).filter_by(spotify_id=SPOTIFY_USER_ID).first()
@@ -90,7 +88,7 @@ def main():
         download_playlist(slskd_client, spotify_client, sql_session, SPOTIFY_PLAYLIST_URL, OUTPUT_PATH)
 
     # add_tracks_from_music_dir("music", sql_session)
-    # createAllPlaylists(spotify_utils, engine)
+    # createAllPlaylists(spotify_client, engine, sql_session)
 
 def download_playlist(slskd_client, spotify_client: SpotifyUtils, sql_session, playlist_url: str, output_path: str):
     """
@@ -109,7 +107,7 @@ def download_playlist(slskd_client, spotify_client: SpotifyUtils, sql_session, p
     os.makedirs(output_path, exist_ok=True)
 
     # add each track to the Tracks database if it doesn't already exist
-    tracks_info = []
+    tracks = []
     for track in playlist_tracks:
         spotify_id = track["track"]["id"]
         track_added_date = track["added_at"]
@@ -119,12 +117,27 @@ def download_playlist(slskd_client, spotify_client: SpotifyUtils, sql_session, p
         album = track["track"]["album"]["name"]
         release_date = track["track"]["album"]["release_date"]
         date_liked = get_date_liked(track["track"]["id"])
-        filepath = download_track(slskd_client, f"{title} - {', '.join([artist[0] for artist in artists])}", output_path)
 
-        SoulDB.Tracks.add_track(sql_session, spotify_id, filepath, title, artists, album, release_date, explicit, date_liked, None)
-        tracks_info.append((spotify_id, track_added_date))
+        # check if the track already exists in the database
+        if spotify_id is None:
+            # TODO: we need a better way to check if the track exists if it's a local file - prolly need to include artists but too much work for rn dc lawl 
+            existing_track = sql_session.query(SoulDB.Tracks).filter_by(title=title, date_liked=date_liked).first()
+        else:
+            existing_track = sql_session.query(SoulDB.Tracks).filter_by(spotify_id=spotify_id).first()
 
-    SoulDB.Playlists.add_playlist(sql_session, playlist_id, playlist_info["name"], playlist_info["description"], tracks_info)
+        # don't download the track if it already exists in the database
+        if existing_track is None:
+            filepath = download_track(slskd_client, f"{title} - {', '.join([artist[0] for artist in artists])}", output_path)
+            track_row = SoulDB.Tracks.add_track(session=sql_session, spotify_id=spotify_id, filepath=filepath, title=title, artists=artists, album=album, release_date=release_date, explicit=explicit, date_liked=date_liked)
+            tracks.append((track_row, track_added_date))
+        else:
+            print(f"Track ({title} - {artists}) already exists in the database, skipping download.")
+            tracks.append((existing_track, track_added_date))
+
+    # add the playlist to the database if it doesn't already exist
+    existing_playlist = sql_session.query(SoulDB.Playlists).filter_by(spotify_id=playlist_id).first()
+    if existing_playlist is None:
+        SoulDB.Playlists.add_playlist(sql_session, playlist_id, playlist_info["name"], playlist_info["description"], tracks)
 
 # TODO: implement this function - need to also create table for liked songs (will be of type Playlist tho)
 def get_date_liked(track_id: str) -> str:
@@ -207,7 +220,7 @@ def createAllPlaylists(spotify_client, engine, session):
         playlist_titles.append(playlist_title)
         # if i == 2:
         #     break
-    # playlist_dict = SoulDB.createPlaylistTables(playlist_titles, playlist_songs, engine, session)
+    playlist_dict = SoulDB.createPlaylistTables(playlist_titles, playlist_songs, engine, session)
     
     # results = session.query(playlist_dict["Gym?!"]).all()
     # for r in results:

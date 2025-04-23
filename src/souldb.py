@@ -41,11 +41,14 @@ class Tracks(Base):
 
     @classmethod
     def add_track(cls, session, title, artists, filepath=None, release_date=None, explicit=None, date_liked=None, spotify_id=None, album=None, comments=None):
-        existing_track = session.query(Tracks).filter_by(spotify_id=spotify_id).first()
+        if spotify_id is None:
+            existing_track = session.query(Tracks).filter_by(filepath=filepath).first()
+        else:
+            existing_track = session.query(Tracks).filter_by(spotify_id=spotify_id).first()
 
         if existing_track is not None:
-            print("YaHEEE")
-            return
+            print(f"Track ({title} - {artists}) already exists in the database - not adding")
+            return existing_track
         
         track = cls(
             spotify_id=spotify_id,
@@ -74,6 +77,7 @@ class Tracks(Base):
             track.track_artists.append(track_artist_assoc)
 
         session.commit()
+        return track
 
 # table with info about every single playlist in the library
 class Playlists(Base):
@@ -85,16 +89,17 @@ class Playlists(Base):
     playlist_tracks = sqla.orm.relationship("PlaylistTracks", back_populates="playlist", cascade="all, delete-orphan")
 
     @classmethod
-    def add_playlist(cls, session, spotify_id, name, description, track_info):
+    def add_playlist(cls, session, spotify_id, name, description, tracks):
+        # create the new_playlist table, add it and flush it so we can access the generated id
         new_playlist = cls(spotify_id=spotify_id, name=name, description=description)
+        session.add(new_playlist)
+        session.flush()
 
         # get track objects for each id and add them with their date_added to the playlist_tracks association table
-        tracks = session.query(Tracks).filter(Tracks.spotify_id.in_([track[0] for track in track_info])).all()
-        track_map = {track.spotify_id: track for track in tracks}
-        for spotify_id, date_added in track_info:
-            track = track_map.get(spotify_id)
-            if track:
-                playlist_track_assoc = PlaylistTracks(track=track, added_at=date_added)
+        # TODO: spotify id is none for local tracks, need to figure out different way to handle this
+        for track, date_added in tracks:
+            if track is not None:
+                playlist_track_assoc = PlaylistTracks(track_id=track.id, playlist_id=new_playlist.id, added_at=date_added)
                 new_playlist.playlist_tracks.append(playlist_track_assoc)
 
         session.add(new_playlist)
