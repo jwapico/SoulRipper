@@ -1,0 +1,17 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python Debugger: main.py with playlist url",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "/home/soulripper/src/main.py",
+            "console": "integratedTerminal",
+            "args": [
+                "music/",
+                "--playlist-url",
+                "https://open.spotify.com/playlist/6h9OgN50iDfClEDryizNe5?si=bd17141666794e3f"
+            ]
+        }
+    ]
+}
