@@ -14,7 +14,7 @@ def add_song_to_playlist(playlist, songId, session):
     # session.add(new_track)
     # session.commit()
     
-    stmt = sql.insert(playlist).values(
+    stmt = sqla.insert(playlist).values(
                 song_id=songId,
             ).prefix_with("OR IGNORE")  # SQLite only
 
@@ -41,6 +41,9 @@ class Tracks(Base):
 
     @classmethod
     def add_track(cls, session, filepath, title,artists, release_date=None, explicit=None, date_liked=None, spotify_id=None, album=None, comments=None):
+        existing_track = session.query(UserInfo).filter_by(spotify_id=spotify_id).first()
+        if existing_track is None:
+            return
         
         track = cls(
             spotify_id=spotify_id,
@@ -142,11 +145,10 @@ def createPlaylistTables(playlists, playlist_songs, engine, session):
     playlist_tables = []
     tables_dict = {}
     for playlist in playlists:
-        attr_dict = {'__tablename__': playlist, 'song_id': sql.Column(sql.String, primary_key=True)}
+        attr_dict = {'__tablename__': playlist, 'song_id': sqla.Column(sqla.String, primary_key=True)}
         current_playlist = type(playlist, (Base,), attr_dict)
         playlist_tables.append(current_playlist)
         tables_dict[playlist] = current_playlist
-
         
     Base.metadata.create_all(bind=engine)
     for playlist in playlists:

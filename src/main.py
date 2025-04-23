@@ -60,7 +60,7 @@ def main():
     SPOTIFY_USER_ID, SPOTIFY_USERNAME = spotify_client.get_user_info()
 
     # create the engine with the local soul.db file
-    engine = sqla.create_engine("sqlite:///assets/soul.db", echo = False)
+    engine = sqla.create_engine("sqlite:///assets/soul.db", echo = True)
 
     # drop everything in the database for debugging
     metadata = sqla.MetaData()
@@ -207,7 +207,7 @@ def createAllPlaylists(spotify_client, engine, session):
         playlist_titles.append(playlist_title)
         # if i == 2:
         #     break
-    playlist_dict = SoulDB.createPlaylistTables(playlist_titles, playlist_songs, engine, session)
+    # playlist_dict = SoulDB.createPlaylistTables(playlist_titles, playlist_songs, engine, session)
     
     # results = session.query(playlist_dict["Gym?!"]).all()
     # for r in results:

@@ -130,11 +130,6 @@ class SlskdUtils:
                 for file in directory["files"]:
                     if file["id"] == file_id:
                         return (download, directory, file)
-        for download in self.client.transfers.get_all_downloads():
-            for directory in download["directories"]:
-                for file in directory["files"]:
-                    if file["id"] == file_id:
-                        return (download, directory, file)
 
     @classmethod
     def filter_search_results(clc, search_results):
@@ -166,7 +161,6 @@ class SlskdUtils:
                 
         relevant_results.sort(key=lambda candidate : candidate[0]["size"], reverse=True)
 
-        # return highest_quality_file, highest_quality_file_user
         return relevant_results
 
     # TODO: cleanup printing and better searching - need to extract artist and title from search data
