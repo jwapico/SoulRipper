@@ -28,7 +28,7 @@ class Tracks(Base):
     __tablename__ = "tracks"
     id = sqla.Column(sqla.Integer, primary_key=True)
     spotify_id = sqla.Column(sqla.String, nullable=True, unique=True)
-    filepath = sqla.Column(sqla.String, nullable=False)
+    filepath = sqla.Column(sqla.String, nullable=True)
     title = sqla.Column(sqla.String, nullable=False)
     track_artists = sqla.orm.relationship("TrackArtist", back_populates="track", cascade="all, delete-orphan")
     artists = sqla.orm.relationship("Artist", secondary="track_artists", viewonly=True)
@@ -40,9 +40,11 @@ class Tracks(Base):
     playlist_tracks = sqla.orm.relationship("PlaylistTracks", back_populates="track", cascade="all, delete-orphan")
 
     @classmethod
-    def add_track(cls, session, filepath, title,artists, release_date=None, explicit=None, date_liked=None, spotify_id=None, album=None, comments=None):
-        existing_track = session.query(UserInfo).filter_by(spotify_id=spotify_id).first()
-        if existing_track is None:
+    def add_track(cls, session, title, artists, filepath=None, release_date=None, explicit=None, date_liked=None, spotify_id=None, album=None, comments=None):
+        existing_track = session.query(Tracks).filter_by(spotify_id=spotify_id).first()
+
+        if existing_track is not None:
+            print("YaHEEE")
             return
         
         track = cls(
