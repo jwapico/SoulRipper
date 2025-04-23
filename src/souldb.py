@@ -40,7 +40,8 @@ class Tracks(Base):
     playlist_tracks = sqla.orm.relationship("PlaylistTracks", back_populates="track", cascade="all, delete-orphan")
 
     @classmethod
-    def add_track(cls, session, spotify_id, filepath, title, artists, album, release_date, explicit, date_liked, comments):
+    def add_track(cls, session, filepath, title,artists, release_date=None, explicit=None, date_liked=None, spotify_id=None, album=None, comments=None):
+        
         track = cls(
             spotify_id=spotify_id,
             filepath=filepath,

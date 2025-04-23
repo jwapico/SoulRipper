@@ -196,7 +196,7 @@ def createAllPlaylists(spotify_client, engine, session):
     playlist_songs = {}
     
     for playlist in all_playlists:
-        all_songs = spotify_client.get_all_playlist_tracks(playlist["id"])
+        all_songs = spotify_client.get_playlist_tracks(playlist["id"])
         playlist_title = playlist["name"]
         playlist_songs[playlist_title] = []
         for song in all_songs:
@@ -215,7 +215,8 @@ def createAllPlaylists(spotify_client, engine, session):
     
 def add_track_from_data(track, session, client):
     # track = client.get_track(id)
-    SoulDB.Tracks.add_track(session, track['id'], "place holder",track['name'],track['artists'][0]['name'],track['album']['release_date'],track['explicit'], 'place holder', 'None')
+    artists = [(artist["name"], artist["id"]) for artist in track["artists"]]
+    SoulDB.Tracks.add_track(session=session, spotify_id=track['id'], filepath="place holder",title=track['name'],artists=artists,release_date=track['album']['release_date'],explicit=track['explicit'], album=track['album']['name'])
  
 def download_track(slskd_client: SlskdUtils, search_query: str, output_path: str) -> str:
     """
