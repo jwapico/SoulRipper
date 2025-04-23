@@ -63,7 +63,7 @@ def main():
     db_session = Session()
 
     add_tracks_from_music_dir("music", db_session)
-    # createAllPlaylists(spotify_client, engine)
+    createAllPlaylists(spotify_client, engine, db_session)
 
 def extract_metadata(filepath: str) -> dict:
     """
@@ -110,22 +110,34 @@ def add_tracks_from_music_dir(music_dir: str, db_session):
                 length = file_metadata.get("length")
                 SoulDB.Tracks.add_track(db_session, filepath, title, artist, date, None, None, None)
 
-def createAllPlaylists(spotify_client, engine):
+def createAllPlaylists(spotify_client, engine, session):
     all_playlists = spotify_client.get_all_playlists()
     save_json(all_playlists,"allPlaylists.json")
 
     playlist_titles = []
-    first = True
+    playlist_songs = []
+    i = 0
     for playlist in all_playlists:
-        
+        playlist_songs.append([])
         all_songs = spotify_client.get_all_playlist_tracks(playlist["id"])
         playlistName = playlist["name"]
-        if first == True: 
-            save_json(all_songs, f"allSongs{playlistName}")
-            save_json(spotify_client.get_track(all_songs[0]['track']['id']), "Footage!")
+        for song in all_songs:
+            id = song['track']['id']
+            if id != None:
+                add_track_from_id(id, session, spotify_client)
+                playlist_songs[i].append(id)
+        i+= 1
         playlist_titles.append(playlistName)
-        first = False
-    # SoulDB.createPlaylistTables(playlist_titles, engine)
+        # break
+    playlist_dict = SoulDB.createPlaylistTables(playlist_titles, playlist_songs, engine, session)
+    
+    results = session.query(playlist_dict["Gym?!"]).all()
+    for r in results:
+        print(r.song_id)
+    
+def add_track_from_id(id, session, client):
+    track = client.get_track(id)
+    SoulDB.Tracks.add_track(session, id, "place holder",track['name'],track['artists'][0]['name'],track['album']['release_date'],track['explicit'], 'place holder', 'None')
     
 def download_track(slskd_client, search_query: str, output_path: str) -> str:
     """

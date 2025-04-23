@@ -9,13 +9,29 @@ from sqlalchemy.orm import declarative_base
 
 Base = declarative_base()
 
-def createPlaylistTables(playlists, engine):
+def add_song_to_playlist(playlist, songId, session):
+    new_track = playlist(song_id = songId)
+    session.add(new_track)
+    session.commit()
+
+def createPlaylistTables(playlists, playlist_songs, engine, session):
     # dropAllPlaylists(playlists, engine)
-    playlistTables = []
+    playlist_tables = []
+    tables_dict = {}
     for playlist in playlists:
-        attr_dict = {'__tablename__': playlist, 'song_id': sql.Column(sql.Integer, primary_key=True)}
-        playlistTables.append(type(playlist, (Base,), attr_dict))
+        attr_dict = {'__tablename__': playlist, 'song_id': sql.Column(sql.String, primary_key=True)}
+        current_playlist = type(playlist, (Base,), attr_dict)
+        playlist_tables.append(current_playlist)
+        tables_dict[playlist] = current_playlist
+
+        
     Base.metadata.create_all(bind=engine)
+    
+    for i in range(len(playlist_songs)):
+        for song in playlist_songs[i]:
+            add_song_to_playlist(current_playlist, song, session)
+    
+    return tables_dict
 
 def dropAllPlaylists(playlists, engine):
     metadata = sql.MetaData()
@@ -29,7 +45,7 @@ def dropAllPlaylists(playlists, engine):
 
 class Tracks(Base):
     __tablename__ = "tracks"
-    id = sql.Column(sql.Integer, primary_key=True)
+    id = sql.Column(sql.String, primary_key=True, unique=True)
     filepath = sql.Column(sql.String, nullable=False)
     title = sql.Column(sql.String, nullable=False)
     artist = sql.Column(sql.String, nullable=False)
@@ -39,9 +55,19 @@ class Tracks(Base):
     comments = sql.Column(sql.String, nullable=True)
 
     @classmethod
-    def add_track(cls, session, filepath, title, artist, release_date, explicit, date_liked, comments):
-        new_track = cls(filepath=filepath, title=title, artist=artist, release_date=release_date, explicit=explicit, date_liked=date_liked, comments=comments)
-        session.add(new_track)
+    def add_track(cls, session, id, filepath, title, artist, release_date, explicit, date_liked, comments):
+        stmt = sql.insert(cls).values(
+                id=id,
+                filepath=filepath,
+                title=title,
+                artist=artist,
+                release_date=release_date,
+                explicit=explicit,
+                date_liked=date_liked,
+                comments=comments
+            ).prefix_with("OR IGNORE")  # SQLite only
+
+        session.execute(stmt)
         session.commit()
 
 class Playlists(Base):
