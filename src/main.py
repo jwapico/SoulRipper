@@ -115,30 +115,30 @@ def createAllPlaylists(spotify_client, engine, session):
     save_json(all_playlists,"allPlaylists.json")
 
     playlist_titles = []
-    playlist_songs = []
-    i = 0
+    playlist_songs = {}
+    
     for playlist in all_playlists:
-        playlist_songs.append([])
         all_songs = spotify_client.get_all_playlist_tracks(playlist["id"])
-        playlistName = playlist["name"]
+        playlist_title = playlist["name"]
+        playlist_songs[playlist_title] = []
         for song in all_songs:
             id = song['track']['id']
             if id != None:
-                add_track_from_id(id, session, spotify_client)
-                playlist_songs[i].append(id)
-        i+= 1
-        playlist_titles.append(playlistName)
-        # break
+                add_track_from_data(song['track'], session, spotify_client)
+                playlist_songs[playlist_title].append(id)
+        playlist_titles.append(playlist_title)
+        # if i == 2:
+        #     break
     playlist_dict = SoulDB.createPlaylistTables(playlist_titles, playlist_songs, engine, session)
     
-    results = session.query(playlist_dict["Gym?!"]).all()
-    for r in results:
-        print(r.song_id)
+    # results = session.query(playlist_dict["Gym?!"]).all()
+    # for r in results:
+    #     print(r.song_id)
     
-def add_track_from_id(id, session, client):
-    track = client.get_track(id)
-    SoulDB.Tracks.add_track(session, id, "place holder",track['name'],track['artists'][0]['name'],track['album']['release_date'],track['explicit'], 'place holder', 'None')
-    
+def add_track_from_data(track, session, client):
+    # track = client.get_track(id)
+    SoulDB.Tracks.add_track(session, track['id'], "place holder",track['name'],track['artists'][0]['name'],track['album']['release_date'],track['explicit'], 'place holder', 'None')
+ 
 def download_track(slskd_client, search_query: str, output_path: str) -> str:
     """
     Downloads a track from soulseek or youtube, only downloading from youtube if the query is not found on soulseek

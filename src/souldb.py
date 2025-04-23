@@ -10,9 +10,17 @@ from sqlalchemy.orm import declarative_base
 Base = declarative_base()
 
 def add_song_to_playlist(playlist, songId, session):
-    new_track = playlist(song_id = songId)
-    session.add(new_track)
+    # new_track = playlist(song_id = songId)
+    # session.add(new_track)
+    # session.commit()
+    
+    stmt = sql.insert(playlist).values(
+                song_id=songId,
+            ).prefix_with("OR IGNORE")  # SQLite only
+
+    session.execute(stmt)
     session.commit()
+
 
 def createPlaylistTables(playlists, playlist_songs, engine, session):
     # dropAllPlaylists(playlists, engine)
@@ -26,11 +34,10 @@ def createPlaylistTables(playlists, playlist_songs, engine, session):
 
         
     Base.metadata.create_all(bind=engine)
-    
-    for i in range(len(playlist_songs)):
-        for song in playlist_songs[i]:
-            add_song_to_playlist(current_playlist, song, session)
-    
+    for playlist in playlists:
+        for song in playlist_songs[playlist]:
+            add_song_to_playlist(tables_dict[playlist], song, session)
+        
     return tables_dict
 
 def dropAllPlaylists(playlists, engine):
