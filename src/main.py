@@ -106,6 +106,7 @@ def main():
     if SPOTIFY_PLAYLIST_URL:
         download_playlist(slskd_client, spotify_client, sql_session, SPOTIFY_PLAYLIST_URL, OUTPUT_PATH)
 
+    add_playlists(spotify_client, session)
     # add_tracks_from_music_dir("music", sql_session)
     # createAllPlaylists(spotify_client, engine, sql_session)
 
@@ -334,6 +335,12 @@ def save_json(data, filename="debug/debug.json"):
     with open(f"debug/{filename}", "w") as file:
         json.dump(data, file)
 
+def add_playlists(spotify_client, session):
+    all_playlists = spotify_client.get_all_playlists()
+    for playlist in all_playlists:
+        tnr_data = spotify_client.get_data_from_playlist(playlist)
+        SoulDB.Playlists.add_playlist(session,playlist['id'],playlist['name'],playlist['description'],tnr_data)
+    
 # def createAllPlaylists(spotify_client, engine):
 #     all_playlists = spotify_client.get_all_playlists()
 #     save_json(all_playlists,"allPlaylists.json")
