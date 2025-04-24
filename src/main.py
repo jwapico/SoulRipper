@@ -16,9 +16,10 @@ from slskd_utils import SlskdUtils
 import souldb as SoulDB
 
 # TODO:
-#   - figure out how to link tracks to playlists
-#   - create and sync database with local music directory
-#   - create and sync database with spotify info
+#   - REFACTOR DOWNLOADING FUNCTIONS
+#       - we should populate the database with TrackData from spotify first, then download Null filepath entries after
+#   - better syncing with local music directory
+#   - create and sync database with ALL spotify data
 #   - better search for soulseek given song title and artist
 #   - better user interface - gui or otherwise
 #       - some sort of config file for api keys, directory paths, etc
@@ -31,10 +32,11 @@ import souldb as SoulDB
 #   - parallelize downloads (threading :D)
 #   - the print statements in lower level functions should be changed to logging/debug statements
 #   - we need to implement atomicity in the database functions - the Table classmethods such NOT be calling session.commit()
+#   - type annotations for ALL functions args and return values
+#   - cleanup comments & add more
 
 def main():
     # collect commandline arguments
-    # TODO: add --max-retries argument
     parser = argparse.ArgumentParser(description="")
     parser.add_argument("pos_output_path", nargs="?", default=os.getcwd(), help="The output directory in which your files will be downloaded")
     parser.add_argument("--output-path", type=str, dest="output_path", help="The output directory in which your files will be downloaded")
@@ -43,6 +45,7 @@ def main():
     parser.add_argument("--update-liked", action="store_true", help="Will download all liked songs from Spotify")
     parser.add_argument("--debug", action="store_true", help="Enable debug statements")
     parser.add_argument("--drop-database", action="store_true", help="Drop the database before running the program")
+    parser.add_argument("--max-retries", type=int, default=5, help="The maximum number of retries for downloading a track")
     args = parser.parse_args()
     OUTPUT_PATH = os.path.abspath(args.output_path or args.pos_output_path)
     SEARCH_QUERY = args.search_query
@@ -50,6 +53,8 @@ def main():
     UPDATE_LIKED = args.update_liked
     DEBUG = args.debug
     DROP_DATABASE = args.drop_database
+    # TODO: refactor code to use this value (i think its used in download_track only - will need to be passed down thru other functions tho - need to refactor this file for shared variables)
+    MAX_RETRIES = args.max_retries
 
     dotenv.load_dotenv()
     os.makedirs(OUTPUT_PATH, exist_ok=True)
@@ -72,7 +77,7 @@ def main():
     # create the engine with the local soul.db file - need to change this for final submission
     engine = sqla.create_engine("sqlite:///assets/soul.db", echo=DROP_DATABASE)
 
-    # drop everything in the database for debugging
+    # if the flag was provided drop everything in the database
     if DROP_DATABASE:
         if not DEBUG:
             input("Warning: This will drop all tables in the database. Press enter to continue...")
@@ -84,22 +89,22 @@ def main():
     # initialize the tables defined in souldb.py and create a session
     SoulDB.Base.metadata.create_all(engine)
     session = sqla.orm.sessionmaker(bind=engine)
-    sql_session = session()
+    sql_session: Session = session()
 
     # add the user to the database if they don't already exist
     matching_user = sql_session.query(SoulDB.UserInfo).filter_by(spotify_id=SPOTIFY_USER_ID).first()
     if matching_user is None:
         SoulDB.UserInfo.add_user(sql_session, SPOTIFY_USERNAME, SPOTIFY_USER_ID, SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET)
 
-    # populate the database with metadata found from the users output directory
-    # TODO: this function technically kinda works but we need a better way to extract metadata from the files
-    scan_music_library(OUTPUT_PATH, sql_session)
+    # populate the database with metadata found from files in the users output directory
+    scan_music_library(sql_session, OUTPUT_PATH)
 
     # if a search query is provided, download the track
     if SEARCH_QUERY:
         output_path = download_from_search_query(slskd_client, SEARCH_QUERY, OUTPUT_PATH)
-        # TODO: get metadata and insert into database (yoink code from download_playlist and refactor into function - see TODO there)
+        # TODO: get metadata and insert into database
 
+    # if the update liked flag is provided, download all liked songs from spotify
     if UPDATE_LIKED:
         download_liked_tracks(slskd_client, spotify_client, sql_session, OUTPUT_PATH)
     
@@ -111,8 +116,10 @@ def main():
     # add_tracks_from_music_dir("music", sql_session)
     # createAllPlaylists(spotify_client, engine, sql_session)
 
-# TODO: need better way to extract metadata
-def scan_music_library(music_dir: str, sql_session):
+# TODO: this function technically kinda works but we need a better way to extract metadata from the files - most files (all downloaded by yt-dlp) have None for all fields :/
+#   - maybe we can extract info from filename
+#   - we should probably populate metadata using TrackData from Spotify API when downloading the track or populating database - this is a lot of work dgaf rn lol
+def scan_music_library(sql_session, music_dir: str):
     """
     Adds all songs in the music directory to the database
 
@@ -121,10 +128,10 @@ def scan_music_library(music_dir: str, sql_session):
     """
     for root, dirs, files in os.walk(music_dir):
         for file in files:
-            # TODO: this should be configured with the config file (still need to implement config file </3)
+            # TODO: these extensions should be configured with the config file (still need to implement config file </3)
             if file.endswith(".mp3") or file.endswith(".flac") or file.endswith(".wav"):
                 filepath = os.path.abspath(os.path.join(root, file))
-                # TODO: look at metadata to see what else we can extract - it's different for each file :(
+                # TODO: look at metadata to see what else we can extract - it's different for each file :( - need to find file with great metadata as example
                 file_metadata = extract_file_metadata(filepath)
                 title  = file_metadata.get("title")
                 artists = file_metadata.get("artist")
@@ -138,7 +145,6 @@ def scan_music_library(music_dir: str, sql_session):
                 if existing_track is None:
                     SoulDB.Tracks.add_track(sql_session, track_data)
 
-# TODO: make a new Playlist table for this data & check to make sure local files are working
 # TODO: bruhhhhhhhhhhh the spotify api current_user_saved_tracks() function doesn't return local files FUCK SPOTIFYU there has to be a workaround
 def download_liked_tracks(slskd_client: SlskdUtils, spotify_client: SpotifyUtils, sql_session, output_path: str):
     liked_tracks_data = spotify_client.get_liked_tracks()
