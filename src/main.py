@@ -107,7 +107,7 @@ def main():
     if SPOTIFY_PLAYLIST_URL:
         download_playlist(slskd_client, spotify_client, sql_session, SPOTIFY_PLAYLIST_URL, OUTPUT_PATH)
 
-    add_playlists(spotify_client, session)
+    add_playlists(spotify_client, sql_session)
     # add_tracks_from_music_dir("music", sql_session)
     # createAllPlaylists(spotify_client, engine, sql_session)
 
@@ -184,8 +184,10 @@ def download_playlist(slskd_client: SlskdUtils, spotify_client: SpotifyUtils, sq
             track_rows_and_data.append((new_track_row, track_data))
         else:
             print(f"Track ({track_data.title} - {track_data.artists}) already exists in the database, skipping download.")
+            if existing_track_row.filepath is None:
+                existing_track_row.filepath = download_track(slskd_client, track_data, output_path)
+                sql_session.commit()
             track_rows_and_data.append((existing_track_row, track_data))
-
     # add the playlist to the database if it doesn't already exist
     existing_playlist = sql_session.query(SoulDB.Playlists).filter_by(spotify_id=playlist_id).first()
     if existing_playlist is None:
@@ -340,8 +342,23 @@ def save_json(data, filename="debug/debug.json"):
 def add_playlists(spotify_client, session):
     all_playlists = spotify_client.get_all_playlists()
     for playlist in all_playlists:
-        tnr_data = spotify_client.get_data_from_playlist(playlist)
-        SoulDB.Playlists.add_playlist(session,playlist['id'],playlist['name'],playlist['description'],tnr_data)
+        playlist_tracks = spotify_client.get_playlist_tracks(playlist['id'])
+        relevant_tracks_data: list[SoulDB.TrackData] = spotify_client.get_data_from_playlist(playlist_tracks)
+
+        track_rows_and_data = []
+        for track_data in relevant_tracks_data:
+            existing_track_row = SoulDB.get_existing_track(session, track_data)
+            if existing_track_row is None:
+                track_data.filepath = None
+                new_track_row = SoulDB.Tracks.add_track(session, track_data)
+                track_rows_and_data.append((new_track_row, track_data))
+            else:
+                # print(f"Track ({track_data.title} - {track_data.artists}) already exists in the database, skipping download.")
+                track_rows_and_data.append((existing_track_row, track_data))
+                
+        existing_playlist = session.query(SoulDB.Playlists).filter_by(spotify_id=playlist['id']).first()
+        if existing_playlist is None:
+            SoulDB.Playlists.add_playlist(session,playlist['id'],playlist['name'],playlist['description'],track_rows_and_data)
     
 # def createAllPlaylists(spotify_client, engine):
 #     all_playlists = spotify_client.get_all_playlists()
