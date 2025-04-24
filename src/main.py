@@ -62,10 +62,11 @@ def main():
     SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
     SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
     SPOTIFY_REDIRECT_URI = os.getenv("SPOTIFY_REDIRECT_URI")
-    if DEBUG:
-        spotify_client = SpotifyUtils(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI,  spotify_scope="user-library-read playlist-modify-public")
-    else:
-        spotify_client = SpotifyUtils(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI)
+    # if DEBUG:
+    #     spotify_client = SpotifyUtils(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI,  spotify_scope="user-library-read playlist-modify-public")
+    # else:
+        # spotify_client = SpotifyUtils(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI)
+    spotify_client = SpotifyUtils(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI)
     SPOTIFY_USER_ID, SPOTIFY_USERNAME = spotify_client.get_user_info()
 
     # create the engine with the local soul.db file - need to change this for final submission
@@ -92,7 +93,7 @@ def main():
 
     # populate the database with metadata found from the users output directory
     # TODO: implement this function
-    scan_music_library(OUTPUT_PATH, sql_session)
+    # scan_music_library(OUTPUT_PATH, sql_session)
 
     # if a search query is provided, download the track
     if SEARCH_QUERY:
@@ -109,6 +110,30 @@ def main():
     add_playlists(spotify_client, session)
     # add_tracks_from_music_dir("music", sql_session)
     # createAllPlaylists(spotify_client, engine, sql_session)
+
+# TODO: finish this function - need to extract to TrackData and add to table
+def scan_music_library(music_dir: str, sql_session):
+    """
+    Adds all songs in the music directory to the database
+
+    Args:
+        music_dir (str): the directory to add songs from
+    """
+    for root, dirs, files in os.walk(music_dir):
+        for file in files:
+            # TODO: this should be configured with the config file (still need to implement config file </3)
+            if file.endswith(".mp3") or file.endswith(".flac") or file.endswith(".wav"):
+                filepath = os.path.abspath(os.path.join(root, file))
+                # TODO: look at metadata to see what else we can extract - it's different for each file :(
+                file_metadata = extract_file_metadata(filepath)
+                title  = file_metadata.get("title")
+                artist = file_metadata.get("artist")
+                album  = file_metadata.get("album")
+                genre  = file_metadata.get("genre")
+                date   = file_metadata.get("date")
+                length = file_metadata.get("length")
+                track_data = SoulDB.TrackData(title=title, artists=artist, album=album, )
+                # SoulDB.Tracks.add_track(sql_session, filepath, title, artist, date, None, None, None)
 
 # TODO: make a new Playlist table for this data & check to make sure local files are working
 # TODO: bruhhhhhhhhhhh the spotify api current_user_saved_tracks() function doesn't return local files FUCK SPOTIFYU there has to be a workaround
@@ -204,29 +229,6 @@ def extract_file_metadata(filepath: str) -> dict:
         "track":  audio.get("tracknumber", [None])[0],
         "length": int(audio.info.length) if audio.info else None,
     }
-
-# TODO: finish this function - need to extract to TrackData and add to table
-def scan_music_library(music_dir: str, sql_session):
-    """
-    Adds all songs in the music directory to the database
-
-    Args:
-        music_dir (str): the directory to add songs from
-    """
-    # for root, dirs, files in os.walk(music_dir):
-    #     for file in files:
-    #         # TODO: this should be configured with the config file (still need to implement config file </3)
-    #         if file.endswith(".mp3") or file.endswith(".flac") or file.endswith(".wav"):
-    #             filepath = os.path.abspath(os.path.join(root, file))
-    #             # TODO: look at metadata to see what else we can extract - it's different for each file :(
-    #             file_metadata = extract_file_metadata(filepath)
-    #             title  = file_metadata.get("title")
-    #             artist = file_metadata.get("artist")
-    #             album  = file_metadata.get("album")
-    #             genre  = file_metadata.get("genre")
-    #             date   = file_metadata.get("date")
-    #             length = file_metadata.get("length")
-    #             SoulDB.Tracks.add_track(sql_session, filepath, title, artist, date, None, None, None)
 
 def createAllPlaylists(spotify_client, engine, session):
     all_playlists = spotify_client.get_all_playlists()
