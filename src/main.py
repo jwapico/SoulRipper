@@ -81,14 +81,14 @@ def main():
     # if a search query is provided, download the track
     if SEARCH_QUERY:
         output_path = download_track(slskd_client, SEARCH_QUERY, OUTPUT_PATH)
-        # TODO: get metadata and insert into database
+        # TODO: get metadata and insert into database (yoink code from download_playlist and refactor into function - see TODO there)
     
     # if a playlist url is provided, download the playlist
     if SPOTIFY_PLAYLIST_URL:
         download_playlist(slskd_client, spotify_client, sql_session, SPOTIFY_PLAYLIST_URL, OUTPUT_PATH)
 
     # add_tracks_from_music_dir("music", sql_session)
-    # createAllPlaylists(spotify_client, engine, sql_session)
+    createAllPlaylists(spotify_client, engine, sql_session)
 
 def download_playlist(slskd_client, spotify_client: SpotifyUtils, sql_session, playlist_url: str, output_path: str):
     """
@@ -109,6 +109,7 @@ def download_playlist(slskd_client, spotify_client: SpotifyUtils, sql_session, p
     # add each track to the Tracks database if it doesn't already exist
     tracks = []
     for track in playlist_tracks:
+        # TODO: all of this functionality needs to be a function so that we can also use it in the if SEARCH_QUERY: block in main (or anytime we want to download/add a single track to the database)
         spotify_id = track["track"]["id"]
         track_added_date = track["added_at"]
         explicit = track["track"]["explicit"]
