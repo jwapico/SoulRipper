@@ -6,6 +6,7 @@
 # https://docs.sqlalchemy.org/en/20/intro.html
 import sqlalchemy as sqla
 from sqlalchemy.orm import declarative_base
+from dataclasses import dataclass
 
 Base = declarative_base()
 
@@ -21,9 +22,34 @@ def add_song_to_playlist(playlist, songId, session):
     session.execute(stmt)
     session.commit()
 
+@dataclass
+class TrackData:
+    """
+    this dataclass contains ALL relevant information about a track in the library
 
-# 
-# table with info about every single track and file in the library 
+    Attributes:
+        filepath (str): the file path of the track
+        spotify_id (str): the Spotify ID of the track
+        title (str): the title of the track
+        artists (list[(str, str)]): a list of each artists name and id for the track
+        album (str): the album of the track
+        release_date (str): the release date of the track
+        date_liked_spotify (str): the date the track was liked on Spotify
+        explicit (bool): whether the track is explicit or not
+        comments (str): any comments about the track
+    """
+    filepath: str = None
+    spotify_id: str = None
+    title: str = None
+    artists: list[(str, str)] = None
+    album: str = None
+    release_date: str = None
+    date_liked_spotify: str = None
+    explicit: bool = None
+    comments: str = None
+
+# table with info about every single track and file in the library
+# TODO: add downloaded_with column to indicate whether the track was downloaded with slskd or yt-dlp
 class Tracks(Base):
     __tablename__ = "tracks"
     id = sqla.Column(sqla.Integer, primary_key=True)
@@ -35,45 +61,47 @@ class Tracks(Base):
     album = sqla.Column(sqla.String, nullable=True)
     release_date = sqla.Column(sqla.String, nullable=True)
     explicit = sqla.Column(sqla.Boolean, nullable=True)
-    date_liked = sqla.Column(sqla.String, nullable=True)
+    date_liked_spotify = sqla.Column(sqla.String, nullable=True)
     comments = sqla.Column(sqla.String, nullable=True)
     playlist_tracks = sqla.orm.relationship("PlaylistTracks", back_populates="track", cascade="all, delete-orphan")
 
     @classmethod
-    def add_track(cls, session, title, artists, filepath=None, release_date=None, explicit=None, date_liked=None, spotify_id=None, album=None, comments=None):
-        if spotify_id is None:
-            existing_track = session.query(Tracks).filter_by(filepath=filepath).first()
+    def add_track(cls, session, track_data: TrackData):
+        if track_data.spotify_id is None:
+            existing_track = session.query(Tracks).filter_by(filepath=track_data.filepath).first()
         else:
-            existing_track = session.query(Tracks).filter_by(spotify_id=spotify_id).first()
+            existing_track = session.query(Tracks).filter_by(spotify_id=track_data.spotify_id).first()
 
         if existing_track is not None:
-            print(f"Track ({title} - {artists}) already exists in the database - not adding")
+            print(f"Track ({track_data.title} - {track_data.artists}) already exists in the database - not adding")
             return existing_track
         
         track = cls(
-            spotify_id=spotify_id,
-            filepath=filepath,
-            title=title,
-            album=album,
-            release_date=release_date,
-            explicit=explicit,
-            date_liked=date_liked,
-            comments=comments
+            spotify_id=track_data.spotify_id,
+            filepath=track_data.filepath,
+            title=track_data.title,
+            album=track_data.album,
+            release_date=track_data.release_date,
+            explicit=track_data.explicit,
+            date_liked_spotify=track_data.date_liked_spotify,
+            comments=track_data.comments
         )
 
         session.add(track)
         session.flush()
 
         # add artists to the Artist table if they don't already exist, and add them to the TrackArtist association table
-        for name, spotify_id in artists:
-            artist = session.query(Artist).filter_by(name=name).first()
+        for name, spotify_id in track_data.artists:
+            existing_artist = session.query(Artist).filter_by(name=name).first()
 
-            if artist is None:
-                artist = Artist(name=name, spotify_id=spotify_id)
-                session.add(artist)
+            if existing_artist is None:
+                new_artist = Artist(name=name, spotify_id=spotify_id)
+                session.add(new_artist)
                 session.flush()
+                track_artist_assoc = TrackArtist(track_id=track.id, artist_id=new_artist.id)
+            else:
+                track_artist_assoc = TrackArtist(track_id=track.id, artist_id=existing_artist.id)
 
-            track_artist_assoc = TrackArtist(track_id=track.id, artist_id=artist.id)
             track.track_artists.append(track_artist_assoc)
 
         session.commit()
@@ -89,18 +117,17 @@ class Playlists(Base):
     playlist_tracks = sqla.orm.relationship("PlaylistTracks", back_populates="playlist", cascade="all, delete-orphan")
 
     @classmethod
-    def add_playlist(cls, session, spotify_id, name, description, tracks):
+    def add_playlist(cls, session, spotify_id, name, description, tracks: list[TrackData]):
         # create the new_playlist table, add it and flush it so we can access the generated id
         new_playlist = cls(spotify_id=spotify_id, name=name, description=description)
         session.add(new_playlist)
         session.flush()
 
         # get track objects for each id and add them with their date_added to the playlist_tracks association table
-        # TODO: spotify id is none for local tracks, need to figure out different way to handle this
-        for track, date_added in tracks:
-            if track is not None:
-                playlist_track_assoc = PlaylistTracks(track_id=track.id, playlist_id=new_playlist.id, added_at=date_added)
-                new_playlist.playlist_tracks.append(playlist_track_assoc)
+        # TODO: we need to do this each time a track is added, not all at the end of the playlist - i think this is a larger refactor and dgaf rn B=D
+        for track_row, track_data in tracks:
+            playlist_track_assoc = PlaylistTracks(track_id=track_row.id, playlist_id=new_playlist.id, added_at=track_data.date_liked_spotify)
+            new_playlist.playlist_tracks.append(playlist_track_assoc)
 
         session.add(new_playlist)
         session.commit()
@@ -174,6 +201,14 @@ def dropAllPlaylists(playlists, engine):
             tables_to_drop.append(table_to_drop)
     Base.metadata.drop_all(engine, tables_to_drop, checkfirst=True)
 
+def get_existing_track(session, track: TrackData):
+    if track.spotify_id is not None:
+        existing_track = session.query(Tracks).filter_by(spotify_id=track.spotify_id).first()
+    else:
+        existing_track = session.query(Tracks).filter_by(filepath=track.filepath, date_liked_spotify=track.date_liked_spotify).first()
+
+    return existing_track
+
 # class Tracks(Base):
 #     __tablename__ = "tracks"
 #     id = sql.Column(sql.Integer, primary_key=True)
@@ -182,12 +217,12 @@ def dropAllPlaylists(playlists, engine):
 #     artist = sql.Column(sql.String, nullable=False)
 #     release_date = sql.Column(sql.String, nullable=True)
 #     explicit = sql.Column(sql.Boolean, nullable=True)
-#     date_liked = sql.Column(sql.String, nullable=True)
+#     date_liked_spotify = sql.Column(sql.String, nullable=True)
 #     comments = sql.Column(sql.String, nullable=True)
 
 #     @classmethod
-#     def add_track(cls, session, filepath, title, artist, release_date, explicit, date_liked, comments):
-#         new_track = cls(filepath=filepath, title=title, artist=artist, release_date=release_date, explicit=explicit, date_liked=date_liked, comments=comments)
+#     def add_track(cls, session, filepath, title, artist, release_date, explicit, date_liked_spotify, comments):
+#         new_track = cls(filepath=filepath, title=title, artist=artist, release_date=release_date, explicit=explicit, date_liked_spotify=date_liked_spotify, comments=comments)
 #         session.add(new_track)
 #         session.commit()
 

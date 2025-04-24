@@ -8,7 +8,7 @@ import argparse
 import dotenv
 import shutil
 import sqlalchemy as sqla
-import sqlalchemy.orm
+from sqlalchemy.orm import Session
 import mutagen
 
 from spotify_utils import SpotifyUtils
@@ -25,29 +25,36 @@ import souldb as SoulDB
 #       - make cli better
 #   - error handling in download functions and probably other places
 #   - restructure this file - there are too many random ahh functions
-#       - maybe incapsulate into class or just make a utils file
-#           - shared variables so we dont have to pass shi around so much
+#       - maybe incapsulate into class or just have shared variables?
 #   - create a TODO.md file for project management and big plans outside of databases final project (due apr 30 :o)
 #       - talk to colton eoghan and other potential users about high level design
-#   - parallelize downloads
-#   - the print statements in lower level functions should be changed to logging/debug statements 
+#   - parallelize downloads (threading :D)
+#   - the print statements in lower level functions should be changed to logging/debug statements
+#   - we need to implement atomicity in the database functions - the Table classmethods such NOT be calling session.commit()
 
 def main():
     # collect commandline arguments
     # TODO: add --max-retries argument
     parser = argparse.ArgumentParser(description="")
     parser.add_argument("pos_output_path", nargs="?", default=os.getcwd(), help="The output directory in which your files will be downloaded")
-    parser.add_argument("--output-path", dest="output_path", help="The output directory in which your files will be downloaded")
-    parser.add_argument("--search-query", dest="search_query", help="The output directory in which your files will be downloaded")
-    parser.add_argument("--playlist-url", dest="playlist_url", help="URL of Spotify playlist")
+    parser.add_argument("--output-path", type=str, dest="output_path", help="The output directory in which your files will be downloaded")
+    parser.add_argument("--search-query", type=str, dest="search_query", help="The output directory in which your files will be downloaded")
+    parser.add_argument("--playlist-url", type=str, dest="playlist_url", help="URL of Spotify playlist")
+    parser.add_argument("--update-liked", action="store_true", help="Will download all liked songs from Spotify")
+    parser.add_argument("--debug", action="store_true", help="Enable debug statements")
+    parser.add_argument("--drop-database", action="store_true", help="Drop the database before running the program")
     args = parser.parse_args()
+    OUTPUT_PATH = os.path.abspath(args.output_path or args.pos_output_path)
     SEARCH_QUERY = args.search_query
     SPOTIFY_PLAYLIST_URL = args.playlist_url
-    OUTPUT_PATH = os.path.abspath(args.output_path or args.pos_output_path)
+    UPDATE_LIKED = args.update_liked
+    DEBUG = args.debug
+    DROP_DATABASE = args.drop_database
+
+    dotenv.load_dotenv()
     os.makedirs(OUTPUT_PATH, exist_ok=True)
 
     # we communicate with slskd through port 5030, you can visit localhost:5030 to see the web front end. its at slskd:5030 in the docker container though
-    dotenv.load_dotenv()
     SLSKD_API_KEY = os.getenv("SLSKD_API_KEY")
     slskd_client = SlskdUtils(SLSKD_API_KEY)
 
@@ -55,42 +62,68 @@ def main():
     SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
     SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
     SPOTIFY_REDIRECT_URI = os.getenv("SPOTIFY_REDIRECT_URI")
-    spotify_client = SpotifyUtils(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI,  spotify_scope="user-library-read playlist-modify-public")
-    # spotify_utils = SpotifyUtils(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI)
+    if DEBUG:
+        spotify_client = SpotifyUtils(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI,  spotify_scope="user-library-read playlist-modify-public")
+    else:
+        spotify_client = SpotifyUtils(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI)
     SPOTIFY_USER_ID, SPOTIFY_USERNAME = spotify_client.get_user_info()
 
-    # create the engine with the local soul.db file
-    engine = sqla.create_engine("sqlite:///assets/soul.db", echo = False)
+    # create the engine with the local soul.db file - need to change this for final submission
+    engine = sqla.create_engine("sqlite:///assets/soul.db", echo=DROP_DATABASE)
 
     # drop everything in the database for debugging
-    # metadata = sqla.MetaData()
-    # metadata.reflect(bind=engine)
-    # metadata.drop_all(engine)
+    if DROP_DATABASE:
+        if not DEBUG:
+            input("Warning: This will drop all tables in the database. Press enter to continue...")
+
+        metadata = sqla.MetaData()
+        metadata.reflect(bind=engine)
+        metadata.drop_all(engine)
 
     # initialize the tables defined in souldb.py and create a session
     SoulDB.Base.metadata.create_all(engine)
-    session = sqlalchemy.orm.sessionmaker(bind=engine)
+    session = sqla.orm.sessionmaker(bind=engine)
     sql_session = session()
-    
 
     # add the user to the database if they don't already exist
-    existing_user = sql_session.query(SoulDB.UserInfo).filter_by(spotify_id=SPOTIFY_USER_ID).first()
-    if existing_user is None:
+    matching_user = sql_session.query(SoulDB.UserInfo).filter_by(spotify_id=SPOTIFY_USER_ID).first()
+    if matching_user is None:
         SoulDB.UserInfo.add_user(sql_session, SPOTIFY_USERNAME, SPOTIFY_USER_ID, SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET)
+
+    # populate the database with metadata found from the users output directory
+    # TODO: implement this function
+    scan_music_library(OUTPUT_PATH, sql_session)
 
     # if a search query is provided, download the track
     if SEARCH_QUERY:
-        output_path = download_track(slskd_client, SEARCH_QUERY, OUTPUT_PATH)
+        output_path = download_from_search_query(slskd_client, SEARCH_QUERY, OUTPUT_PATH)
         # TODO: get metadata and insert into database (yoink code from download_playlist and refactor into function - see TODO there)
+
+    if UPDATE_LIKED:
+        download_liked_tracks(slskd_client, spotify_client, sql_session, OUTPUT_PATH)
     
     # if a playlist url is provided, download the playlist
     if SPOTIFY_PLAYLIST_URL:
         download_playlist(slskd_client, spotify_client, sql_session, SPOTIFY_PLAYLIST_URL, OUTPUT_PATH)
 
     # add_tracks_from_music_dir("music", sql_session)
-    createAllPlaylists(spotify_client, engine, sql_session)
+    # createAllPlaylists(spotify_client, engine, sql_session)
 
-def download_playlist(slskd_client, spotify_client: SpotifyUtils, sql_session, playlist_url: str, output_path: str):
+# TODO: make a new Playlist table for this data & check to make sure local files are working
+# TODO: bruhhhhhhhhhhh the spotify api current_user_saved_tracks() function doesn't return local files FUCK SPOTIFYU there has to be a workaround
+def download_liked_tracks(slskd_client: SlskdUtils, spotify_client: SpotifyUtils, sql_session, output_path: str):
+    liked_tracks_data = spotify_client.get_liked_tracks()
+    relevant_tracks_data: list[SoulDB.TrackData] = spotify_client.get_data_from_playlist(liked_tracks_data)
+
+    for track in relevant_tracks_data:
+        existing_track = SoulDB.get_existing_track(sql_session, track)
+        if existing_track is None:
+            filepath = download_track(slskd_client, track, output_path)
+            track.filepath = filepath
+
+            SoulDB.Tracks.add_track(sql_session, track)
+
+def download_playlist(slskd_client: SlskdUtils, spotify_client: SpotifyUtils, sql_session, playlist_url: str, output_path: str):
     """
     Downloads a playlist from spotify
 
@@ -106,42 +139,28 @@ def download_playlist(slskd_client, spotify_client: SpotifyUtils, sql_session, p
     output_path = os.path.join(output_path, playlist_info["name"])
     os.makedirs(output_path, exist_ok=True)
 
-    # add each track to the Tracks database if it doesn't already exist
-    tracks = []
-    for track in playlist_tracks:
-        # TODO: all of this functionality needs to be a function so that we can also use it in the if SEARCH_QUERY: block in main (or anytime we want to download/add a single track to the database)
-        spotify_id = track["track"]["id"]
-        track_added_date = track["added_at"]
-        explicit = track["track"]["explicit"]
-        title = track["track"]["name"]
-        artists = [(artist["name"], artist["id"]) for artist in track["track"]["artists"]]
-        album = track["track"]["album"]["name"]
-        release_date = track["track"]["album"]["release_date"]
-        date_liked = get_date_liked(track["track"]["id"])
+    relevant_tracks_data: list[SoulDB.TrackData] = spotify_client.get_data_from_playlist(playlist_tracks)
 
-        # check if the track already exists in the database
-        if spotify_id is None:
-            # TODO: we need a better way to check if the track exists if it's a local file - prolly need to include artists but too much work for rn dc lawl 
-            existing_track = sql_session.query(SoulDB.Tracks).filter_by(title=title, date_liked=date_liked).first()
+    track_rows_and_data = []
+    for track_data in relevant_tracks_data:
+        existing_track_row = SoulDB.get_existing_track(sql_session, track_data)
+        # TODO: need better searching !
+        if existing_track_row is None:
+            filepath = download_track(slskd_client, track_data, output_path)
+            track_data.filepath = filepath
+            new_track_row = SoulDB.Tracks.add_track(sql_session, track_data)
+            track_rows_and_data.append((new_track_row, track_data))
         else:
-            existing_track = sql_session.query(SoulDB.Tracks).filter_by(spotify_id=spotify_id).first()
-
-        # don't download the track if it already exists in the database
-        if existing_track is None:
-            filepath = download_track(slskd_client, f"{title} - {', '.join([artist[0] for artist in artists])}", output_path)
-            track_row = SoulDB.Tracks.add_track(session=sql_session, spotify_id=spotify_id, filepath=filepath, title=title, artists=artists, album=album, release_date=release_date, explicit=explicit, date_liked=date_liked)
-            tracks.append((track_row, track_added_date))
-        else:
-            print(f"Track ({title} - {artists}) already exists in the database, skipping download.")
-            tracks.append((existing_track, track_added_date))
+            print(f"Track ({track_data.title} - {track_data.artists}) already exists in the database, skipping download.")
+            track_rows_and_data.append((existing_track_row, track_data))
 
     # add the playlist to the database if it doesn't already exist
     existing_playlist = sql_session.query(SoulDB.Playlists).filter_by(spotify_id=playlist_id).first()
     if existing_playlist is None:
-        SoulDB.Playlists.add_playlist(sql_session, playlist_id, playlist_info["name"], playlist_info["description"], tracks)
+        SoulDB.Playlists.add_playlist(sql_session, playlist_id, playlist_info["name"], playlist_info["description"], track_rows_and_data)
 
 # TODO: implement this function - need to also create table for liked songs (will be of type Playlist tho)
-def get_date_liked(track_id: str) -> str:
+def get_date_liked_spotify(track_id: str) -> str:
     """
     Gets the date a track was liked from user spotify liked songs
 
@@ -154,8 +173,7 @@ def get_date_liked(track_id: str) -> str:
 
     return None
 
-
-def extract_metadata(filepath: str) -> dict:
+def extract_file_metadata(filepath: str) -> dict:
     """
     Extracts metadata from a file using mutagen
 
@@ -180,27 +198,28 @@ def extract_metadata(filepath: str) -> dict:
         "length": int(audio.info.length) if audio.info else None,
     }
 
-# TODO: finish this function - need to add artists to Artists table
-def add_tracks_from_music_dir(music_dir: str, sql_session):
+# TODO: finish this function - need to extract to TrackData and add to table
+def scan_music_library(music_dir: str, sql_session):
     """
     Adds all songs in the music directory to the database
 
     Args:
         music_dir (str): the directory to add songs from
     """
-    for root, dirs, files in os.walk(music_dir):
-        for file in files:
-            if file.endswith(".mp3") or file.endswith(".flac") or file.endswith(".wav"):
-                filepath = os.path.abspath(os.path.join(root, file))
-                # TODO: look at metadata to see what else we can extract - it's different for each file :(
-                file_metadata = extract_metadata(filepath)
-                title  = file_metadata.get("title")
-                artist = file_metadata.get("artist")
-                album  = file_metadata.get("album")
-                genre  = file_metadata.get("genre")
-                date   = file_metadata.get("date")
-                length = file_metadata.get("length")
-                SoulDB.Tracks.add_track(sql_session, filepath, title, artist, date, None, None, None)
+    # for root, dirs, files in os.walk(music_dir):
+    #     for file in files:
+    #         # TODO: this should be configured with the config file (still need to implement config file </3)
+    #         if file.endswith(".mp3") or file.endswith(".flac") or file.endswith(".wav"):
+    #             filepath = os.path.abspath(os.path.join(root, file))
+    #             # TODO: look at metadata to see what else we can extract - it's different for each file :(
+    #             file_metadata = extract_file_metadata(filepath)
+    #             title  = file_metadata.get("title")
+    #             artist = file_metadata.get("artist")
+    #             album  = file_metadata.get("album")
+    #             genre  = file_metadata.get("genre")
+    #             date   = file_metadata.get("date")
+    #             length = file_metadata.get("length")
+    #             SoulDB.Tracks.add_track(sql_session, filepath, title, artist, date, None, None, None)
 
 def createAllPlaylists(spotify_client, engine, session):
     all_playlists = spotify_client.get_all_playlists()
@@ -232,7 +251,7 @@ def add_track_from_data(track, session, client):
     artists = [(artist["name"], artist["id"]) for artist in track["artists"]]
     SoulDB.Tracks.add_track(session=session, spotify_id=track['id'],title=track['name'],artists=artists,release_date=track['album']['release_date'],explicit=track['explicit'], album=track['album']['name'])
  
-def download_track(slskd_client: SlskdUtils, search_query: str, output_path: str) -> str:
+def download_from_search_query(slskd_client: SlskdUtils, search_query: str, output_path: str) -> str:
     """
     Downloads a track from soulseek or youtube, only downloading from youtube if the query is not found on soulseek
 
@@ -248,6 +267,12 @@ def download_track(slskd_client: SlskdUtils, search_query: str, output_path: str
     if download_path is None:
         download_path = download_track_ytdlp(search_query, output_path)
 
+    return download_path
+
+# TODO: THIS IS WHERE BETTER SEARCH WILL HAPPEN - NEED TO CONSTRUCT QUERY FROM TRACK DATA
+def download_track(slskd_client: SlskdUtils, track: SoulDB.TrackData, output_path: str) -> str:
+    search_query = f"{track.title} - {', '.join([artist[0] for artist in track.artists])}"
+    download_path = download_from_search_query(slskd_client, search_query, output_path)
     return download_path
 
 def download_track_ytdlp(search_query: str, output_path: str) -> str :
@@ -299,8 +324,8 @@ def download_track_ytdlp(search_query: str, output_path: str) -> str :
 def pprint(data):
     print(json.dumps(data, indent=4))
 
-def save_json(data, filepath="debug.json"):
-    with open(filepath, "w") as file:
+def save_json(data, filename="debug/debug.json"):
+    with open(f"debug/{filename}", "w") as file:
         json.dump(data, file)
 
 # def createAllPlaylists(spotify_client, engine):

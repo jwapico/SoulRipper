@@ -2,17 +2,54 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python Debugger: main.py with playlist url",
+            "name": "main.py with long playlist",
             "type": "debugpy",
             "request": "launch",
             "program": "/home/soulripper/src/main.py",
             "console": "integratedTerminal",
             "args": [
-                "music/",
+                "debug/music/",
                 "--playlist-url",
-                // "https://open.spotify.com/playlist/6h9OgN50iDfClEDryizNe5?si=bd17141666794e3f"
-                "https://open.spotify.com/playlist/47uFYjiMl6zRb0gZcy0Nas?si=41b5a57749e3482e"
+                "https://open.spotify.com/playlist/6h9OgN50iDfClEDryizNe5?si=bd17141666794e3f",
+                "--debug"
             ]
-        }
+        },
+        {
+            "name": "main.py with short playlist",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "/home/soulripper/src/main.py",
+            "console": "integratedTerminal",
+            "args": [
+                "debug/music/",
+                "--playlist-url",
+                "https://open.spotify.com/playlist/47uFYjiMl6zRb0gZcy0Nas?si=41b5a57749e3482e",
+                "--debug"
+            ]
+        },
+        {
+            "name": "main.py with update liked",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "/home/soulripper/src/main.py",
+            "console": "integratedTerminal",
+            "args": [
+                "debug/music/",
+                "--update-liked",
+                "--debug"
+            ]
+        },
+        {
+            "name": "drop database",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "/home/soulripper/src/main.py",
+            "console": "integratedTerminal",
+            "args": [
+                "debug/",
+                "--debug",
+                "--drop-database"
+            ]
+        },
     ]
 }

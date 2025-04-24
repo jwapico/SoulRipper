@@ -1,6 +1,7 @@
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 from dotenv import load_dotenv
+from souldb import TrackData
 import re
 
 class SpotifyUtils:
@@ -85,7 +86,7 @@ class SpotifyUtils:
 
         return playlist_id
     
-    def get_liked_songs(self):
+    def get_liked_tracks(self):
         all_tracks = []
         offset = 0
 
@@ -106,3 +107,28 @@ class SpotifyUtils:
         profile = self.spotipy_client.current_user()
 
         return (profile["id"], profile["display_name"])
+    
+    def get_data_from_playlist(self, tracks) -> list[TrackData]:
+        relevant_data = []
+        for track in tracks:
+            spotify_id = track["track"]["id"]
+            title = track["track"]["name"]
+            artists = [(artist["name"], artist["id"]) for artist in track["track"]["artists"]]
+            album = track["track"]["album"]["name"]
+            release_date = track["track"]["album"]["release_date"]
+            track_added_date = track["added_at"]
+            explicit = track["track"]["explicit"]
+
+            track_data = TrackData(
+                spotify_id=spotify_id,
+                title=title,
+                artists=artists,
+                album=album,
+                release_date=release_date,
+                date_liked_spotify=track_added_date,
+                explicit=explicit
+            )
+
+            relevant_data.append(track_data)
+        
+        return relevant_data

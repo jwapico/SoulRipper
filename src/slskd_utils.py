@@ -11,7 +11,7 @@ class SlskdUtils:
         self.client = slskd_api.SlskdClient("http://slskd:5030", api_key)
 
     # TODO: the output filename is wrong also ERROR HANDLING
-    def download_track(self, search_query: str, output_path: str, max_retries=5) -> str:       
+    def download_track(self, search_query: str, output_path: str, max_retries=5, time_limit=None) -> str:       
         """
         Attempts to download a track from soulseek
 
@@ -48,9 +48,9 @@ class SlskdUtils:
         download_state = self.client.transfers.get_download(download_user, file_id)["state"]
         num_retries = 0
         while not "Completed" in download_state:
-            if num_retries > 120:
-                print("download took longer than 2 minutes - skipping - this is only for debugging and we need to look at the downloads status")
-                break
+            if time_limit and num_retries > time_limit:
+                print(f"download took longer than {time_limit} - skipping - this is only for debugging and we need to look at the downloads status")
+                continue
 
             download_state = self.client.transfers.get_download(download_user, file_id)["state"]
             print(download_state)
@@ -132,6 +132,9 @@ class SlskdUtils:
                         return (download, directory, file)
 
     @classmethod
+    # TODO: we need to analyze the quality of the results somehow
+    #   - for example, if the new file contains "remix" and the original file does not, we should remove it from the query
+    #   - we are incorrectly downloading a lot of shit results
     def filter_search_results(clc, search_results):
         """
         Filters the search results to only include downloadable mp3 and flac files sorted by size
