@@ -55,7 +55,7 @@ class Tracks(Base):
     id = sqla.Column(sqla.Integer, primary_key=True)
     spotify_id = sqla.Column(sqla.String, nullable=True, unique=True)
     filepath = sqla.Column(sqla.String, nullable=True)
-    title = sqla.Column(sqla.String, nullable=False)
+    title = sqla.Column(sqla.String, nullable=True)
     track_artists = sqla.orm.relationship("TrackArtist", back_populates="track", cascade="all, delete-orphan")
     artists = sqla.orm.relationship("Artist", secondary="track_artists", viewonly=True)
     album = sqla.Column(sqla.String, nullable=True)
@@ -91,18 +91,19 @@ class Tracks(Base):
         session.flush()
 
         # add artists to the Artist table if they don't already exist, and add them to the TrackArtist association table
-        for name, spotify_id in track_data.artists:
-            existing_artist = session.query(Artist).filter_by(name=name).first()
+        if track_data.artists is not None:
+            for name, spotify_id in track_data.artists:
+                existing_artist = session.query(Artist).filter_by(name=name).first()
 
-            if existing_artist is None:
-                new_artist = Artist(name=name, spotify_id=spotify_id)
-                session.add(new_artist)
-                session.flush()
-                track_artist_assoc = TrackArtist(track_id=track.id, artist_id=new_artist.id)
-            else:
-                track_artist_assoc = TrackArtist(track_id=track.id, artist_id=existing_artist.id)
+                if existing_artist is None:
+                    new_artist = Artist(name=name, spotify_id=spotify_id)
+                    session.add(new_artist)
+                    session.flush()
+                    track_artist_assoc = TrackArtist(track_id=track.id, artist_id=new_artist.id)
+                else:
+                    track_artist_assoc = TrackArtist(track_id=track.id, artist_id=existing_artist.id)
 
-            track.track_artists.append(track_artist_assoc)
+                track.track_artists.append(track_artist_assoc)
 
         session.commit()
         return track
@@ -147,7 +148,7 @@ class Artist(Base):
     __tablename__ = "artists"
     id = sqla.Column(sqla.Integer, primary_key=True)
     spotify_id = sqla.Column(sqla.String, nullable=True, unique=True)
-    name = sqla.Column(sqla.String, nullable=False, unique=True)
+    name = sqla.Column(sqla.String, nullable=True, unique=False)
     track_artists = sqla.orm.relationship("TrackArtist", back_populates="artist", cascade="all, delete-orphan")
 
 # association table that creates a simple many-to-many relationship between tracks and artists

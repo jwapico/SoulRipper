@@ -92,8 +92,8 @@ def main():
         SoulDB.UserInfo.add_user(sql_session, SPOTIFY_USERNAME, SPOTIFY_USER_ID, SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET)
 
     # populate the database with metadata found from the users output directory
-    # TODO: implement this function
-    # scan_music_library(OUTPUT_PATH, sql_session)
+    # TODO: this function technically kinda works but we need a better way to extract metadata from the files
+    scan_music_library(OUTPUT_PATH, sql_session)
 
     # if a search query is provided, download the track
     if SEARCH_QUERY:
@@ -107,11 +107,11 @@ def main():
     if SPOTIFY_PLAYLIST_URL:
         download_playlist(slskd_client, spotify_client, sql_session, SPOTIFY_PLAYLIST_URL, OUTPUT_PATH)
 
-    add_playlists(spotify_client, sql_session)
+    # add_playlists(spotify_client, sql_session)
     # add_tracks_from_music_dir("music", sql_session)
     # createAllPlaylists(spotify_client, engine, sql_session)
 
-# TODO: finish this function - need to extract to TrackData and add to table
+# TODO: need better way to extract metadata
 def scan_music_library(music_dir: str, sql_session):
     """
     Adds all songs in the music directory to the database
@@ -127,13 +127,16 @@ def scan_music_library(music_dir: str, sql_session):
                 # TODO: look at metadata to see what else we can extract - it's different for each file :(
                 file_metadata = extract_file_metadata(filepath)
                 title  = file_metadata.get("title")
-                artist = file_metadata.get("artist")
+                artists = file_metadata.get("artist")
                 album  = file_metadata.get("album")
-                genre  = file_metadata.get("genre")
                 date   = file_metadata.get("date")
-                length = file_metadata.get("length")
-                track_data = SoulDB.TrackData(title=title, artists=artist, album=album, )
-                # SoulDB.Tracks.add_track(sql_session, filepath, title, artist, date, None, None, None)
+
+                artists = [(artist, None) for artist in artists.split(",")] if artists else [(None, None)]
+                track_data = SoulDB.TrackData(filepath=filepath, title=title, artists=artists, album=album, release_date=date)
+    
+                existing_track = SoulDB.get_existing_track(sql_session, track_data)
+                if existing_track is None:
+                    SoulDB.Tracks.add_track(sql_session, track_data)
 
 # TODO: make a new Playlist table for this data & check to make sure local files are working
 # TODO: bruhhhhhhhhhhh the spotify api current_user_saved_tracks() function doesn't return local files FUCK SPOTIFYU there has to be a workaround
@@ -286,6 +289,7 @@ def download_track(slskd_client: SlskdUtils, track: SoulDB.TrackData, output_pat
     download_path = download_from_search_query(slskd_client, search_query, output_path)
     return download_path
 
+# TODO: need to embed metadata into the file after it downloads
 def download_track_ytdlp(search_query: str, output_path: str) -> str :
     """
     Downloads a track from youtube using yt-dlp
