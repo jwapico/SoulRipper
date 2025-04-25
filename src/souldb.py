@@ -13,14 +13,14 @@ Base = declarative_base()
 def add_song_to_playlist(playlist, songId, session):
     # new_track = playlist(song_id = songId)
     # session.add(new_track)
-    # session.commit()
+    # session.flush()
     
     stmt = sqla.insert(playlist).values(
                 song_id=songId,
             ).prefix_with("OR IGNORE")  # SQLite only
 
     session.execute(stmt)
-    session.commit()
+    session.flush()
 
 @dataclass
 class TrackData:
@@ -68,11 +68,8 @@ class Tracks(Base):
 
     @classmethod
     def add_track(cls, session, track_data: TrackData):
-        if track_data.spotify_id is not None:
-            existing_track = session.query(Tracks).filter_by(spotify_id=track_data.spotify_id).first()
-        else:
-            existing_track = session.query(Tracks).filter_by(title=track_data.title).first()
-
+        existing_track = get_existing_track(session, track_data)
+        
         if existing_track is not None:
             print(f"Track ({track_data.title} - {track_data.artists}) already exists in the database - not adding")
             return existing_track
@@ -106,7 +103,7 @@ class Tracks(Base):
 
                 track.track_artists.append(track_artist_assoc)
 
-        session.commit()
+        session.flush()
         return track
 
 # table with info about every single playlist in the library
@@ -132,7 +129,7 @@ class Playlists(Base):
         #     new_playlist.playlist_tracks.append(playlist_track_assoc)
 
         session.add(new_playlist)
-        session.commit()
+        session.flush()
 
         return new_playlist
 
@@ -176,7 +173,7 @@ class UserInfo(Base):
     def add_user(cls, session, username, spotify_id, spotify_client_id, spotify_client_secret):
         new_user = cls(username=username, spotify_id=spotify_id, spotify_client_id=spotify_client_id, spotify_client_secret=spotify_client_secret)
         session.add(new_user)
-        session.commit()
+        session.flush()
 
 def createPlaylistTables(playlists, playlist_songs, engine, session):
     # dropAllPlaylists(playlists, engine)
@@ -228,7 +225,7 @@ def get_existing_track(session, track: TrackData):
 #     def add_track(cls, session, filepath, title, artist, release_date, explicit, date_liked_spotify, comments):
 #         new_track = cls(filepath=filepath, title=title, artist=artist, release_date=release_date, explicit=explicit, date_liked_spotify=date_liked_spotify, comments=comments)
 #         session.add(new_track)
-#         session.commit()
+#         session.flush()
 
 # class Playlists(Base):
 #     __tablename__ = "playlists"
@@ -241,7 +238,7 @@ def get_existing_track(session, track: TrackData):
 #     def add_playlist(cls, session, name, date_created, comments):
 #         new_playlist = cls(name=name, date_created=date_created, comments=comments)
 #         session.add(new_playlist)
-#         session.commit()
+#         session.flush()
 
 # # TODO: idk what should go here, or what the 3rd table should even include
 # # 	- maybe we should create a table for genres, though we could also just treat genres as playlists
@@ -256,4 +253,4 @@ def get_existing_track(session, track: TrackData):
 #     def add_user(cls, session, username, spotify_client_id, spotify_client_secret):
 #         new_user = cls(username=username, spotify_client_id=spotify_client_id, spotify_client_secret=spotify_client_secret)
 #         session.add(new_user)
-#         session.commit()
+#         session.flush()
