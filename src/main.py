@@ -124,9 +124,36 @@ def main():
     # add_playlists(spotify_client, sql_session)
     # add_tracks_from_music_dir("music", sql_session)
     # createAllPlaylists(spotify_client, engine, sql_session)
+ 
+# TODO: this function technically kinda works but we need a better way to extract metadata from the files - most files (all downloaded by yt-dlp) have None for all fields except filepath :/
+#   - maybe we can extract info from filename
+#   - we should probably populate metadata using TrackData from database or Spotify API - this is a lot of work dgaf rn lol
+def scan_music_library(sql_session, music_dir: str):
+    """
+    Adds all songs in the music directory to the database
 
-# TODO: implement this function - add each track from each playlist to the database - as well as all the liked songs
-#   - reference download_liked_tracks for liked tracks, and call nates add_playlists function for playlists
+    Args:
+        music_dir (str): the directory to add songs from
+    """
+    for root, dirs, files in os.walk(music_dir):
+        for file in files:
+            # TODO: these extensions should be configured with the config file (still need to implement config file </3)
+            if file.endswith(".mp3") or file.endswith(".flac") or file.endswith(".wav"):
+                filepath = os.path.abspath(os.path.join(root, file))
+                # TODO: look at metadata to see what else we can extract - it's different for each file :( - need to find file with great metadata as example
+                file_metadata = extract_file_metadata(filepath)
+                title  = file_metadata.get("title")
+                artists = file_metadata.get("artist")
+                album  = file_metadata.get("album")
+                date   = file_metadata.get("date")
+
+                artists = [(artist, None) for artist in artists.split(",")] if artists else [(None, None)]
+                track_data = SoulDB.TrackData(filepath=filepath, title=title, artists=artists, album=album, release_date=date)
+    
+                existing_track = SoulDB.get_existing_track(sql_session, track_data)
+                if existing_track is None:
+                    SoulDB.Tracks.add_track(sql_session, track_data)
+
 def update_db_with_all_spotify_data(sql_session, spotify_client):
     """
     Updates the database with the data from spotify
@@ -166,34 +193,43 @@ def update_db_with_all_spotify_data(sql_session, spotify_client):
         else:
             spotify_liked_playlist.playlist_tracks.append(playlist_track_assoc)
 
-# TODO: this function technically kinda works but we need a better way to extract metadata from the files - most files (all downloaded by yt-dlp) have None for all fields except filepath :/
-#   - maybe we can extract info from filename
-#   - we should probably populate metadata using TrackData from database or Spotify API - this is a lot of work dgaf rn lol
-def scan_music_library(sql_session, music_dir: str):
-    """
-    Adds all songs in the music directory to the database
+# TODO: this function is slow - maybe we can make it better for that one deliverable
+def update_db_with_spotify_playlists(spotify_client: SpotifyUtils, session):
+    all_playlists = spotify_client.get_all_playlists()
 
-    Args:
-        music_dir (str): the directory to add songs from
-    """
-    for root, dirs, files in os.walk(music_dir):
-        for file in files:
-            # TODO: these extensions should be configured with the config file (still need to implement config file </3)
-            if file.endswith(".mp3") or file.endswith(".flac") or file.endswith(".wav"):
-                filepath = os.path.abspath(os.path.join(root, file))
-                # TODO: look at metadata to see what else we can extract - it's different for each file :( - need to find file with great metadata as example
-                file_metadata = extract_file_metadata(filepath)
-                title  = file_metadata.get("title")
-                artists = file_metadata.get("artist")
-                album  = file_metadata.get("album")
-                date   = file_metadata.get("date")
+    # for debugging - if it does ur whole library it will be slow as shit, for me it took
+    # all_playlists = all_playlists[:5]
 
-                artists = [(artist, None) for artist in artists.split(",")] if artists else [(None, None)]
-                track_data = SoulDB.TrackData(filepath=filepath, title=title, artists=artists, album=album, release_date=date)
-    
-                existing_track = SoulDB.get_existing_track(sql_session, track_data)
-                if existing_track is None:
-                    SoulDB.Tracks.add_track(sql_session, track_data)
+    for playlist in all_playlists:
+        playlist_tracks = spotify_client.get_playlist_tracks(playlist['id'])
+        relevant_tracks_data: list[SoulDB.TrackData] = spotify_client.get_data_from_playlist(playlist_tracks)
+
+        # create and flush the playlist since we need its id for the playlist_tracks association table
+        matching_playlist = session.query(SoulDB.Playlists).filter_by(spotify_id=playlist['id']).first()
+        if matching_playlist is None:
+            new_playlist = SoulDB.Playlists.add_playlist(session, playlist['id'], playlist['name'], playlist['description'], None)
+            session.add(new_playlist)
+            session.flush()
+
+        # add each track in the playlist to the database if it doesn't already exist
+        track_rows_and_data = []
+        for track_data in relevant_tracks_data:
+            existing_track_row = SoulDB.get_existing_track(session, track_data)
+            if existing_track_row is None:
+                track_data.filepath = None
+                new_track_row = SoulDB.Tracks.add_track(session, track_data)
+                playlist_track_assoc = SoulDB.PlaylistTracks(track_id=new_track_row.id, playlist_id=playlist['id'], added_at=track_data.date_liked_spotify)
+            else:
+                track_rows_and_data.append((existing_track_row, track_data))
+                playlist_track_assoc = SoulDB.PlaylistTracks(track_id=existing_track_row.id, playlist_id=playlist['id'], added_at=track_data.date_liked_spotify)
+
+            # add the track to the playlist_tracks association table
+            if matching_playlist:
+                matching_playlist.playlist_tracks.append(playlist_track_assoc)
+            else:
+                new_playlist.playlist_tracks.append(playlist_track_assoc)
+
+# TODO: both of these functions need to be rewritten since we are now downloading by searching the database for null filepaths (W)
 
 # TODO: bruhhhhhhhhhhh the spotify api current_user_saved_tracks() function doesn't return local files FUCK SPOTIFYU there has to be a workaround
 def download_liked_tracks(slskd_client: SlskdUtils, spotify_client: SpotifyUtils, sql_session, output_path: str):
@@ -252,93 +288,6 @@ def download_playlist(slskd_client: SlskdUtils, spotify_client: SpotifyUtils, sq
     if existing_playlist is None:
         SoulDB.Playlists.add_playlist(sql_session, playlist_id, playlist_info["name"], playlist_info["description"], track_rows_and_data)
 
-# TODO: implement this function - need to also create table for liked songs (will be of type Playlist tho)
-def get_date_liked_spotify(track_id: str) -> str:
-    """
-    Gets the date a track was liked from user spotify liked songs
-
-    Args:
-        track_id (str): the id of the track
-
-    Returns:
-        str: the date the track was liked
-    """
-
-    return None
-
-def extract_file_metadata(filepath: str) -> dict:
-    """
-    Extracts metadata from a file using mutagen
-
-    Args:
-        filepath (str): the path to the file
-
-    Returns:
-        dict: a dictionary of metadata
-    """
-    audio = mutagen.File(filepath)
-
-    if not audio:
-        return None
-
-    return {
-        "title":  audio.get("title", [None])[0],
-        "artist": audio.get("artist", [None])[0],
-        "album":  audio.get("album", [None])[0],
-        "genre":  audio.get("genre", [None])[0],
-        "date":   audio.get("date", [None])[0],
-        "track":  audio.get("tracknumber", [None])[0],
-        "length": int(audio.info.length) if audio.info else None,
-    }
-
-def createAllPlaylists(spotify_client, engine, session):
-    all_playlists = spotify_client.get_all_playlists()
-    save_json(all_playlists,"allPlaylists.json")
-
-    playlist_titles = []
-    playlist_songs = {}
-    
-    for playlist in all_playlists:
-        all_songs = spotify_client.get_playlist_tracks(playlist["id"])
-        playlist_title = playlist["name"]
-        playlist_songs[playlist_title] = []
-        for song in all_songs:
-            id = song['track']['id']
-            if id != None:
-                add_track_from_data(song['track'], session, spotify_client)
-                playlist_songs[playlist_title].append(id)
-        playlist_titles.append(playlist_title)
-        # if i == 2:
-        #     break
-    playlist_dict = SoulDB.createPlaylistTables(playlist_titles, playlist_songs, engine, session)
-    
-    # results = session.query(playlist_dict["Gym?!"]).all()
-    # for r in results:
-    #     print(r.song_id)
-    
-def add_track_from_data(track, session, client):
-    # track = client.get_track(id)
-    artists = [(artist["name"], artist["id"]) for artist in track["artists"]]
-    SoulDB.Tracks.add_track(session=session, spotify_id=track['id'],title=track['name'],artists=artists,release_date=track['album']['release_date'],explicit=track['explicit'], album=track['album']['name'])
- 
-def download_from_search_query(slskd_client: SlskdUtils, search_query: str, output_path: str) -> str:
-    """
-    Downloads a track from soulseek or youtube, only downloading from youtube if the query is not found on soulseek
-
-    Args:
-        search_query (str): the song to download, can be a search query
-        output_path (str): the directory to download the song to
-
-    Returns:
-        str: the path to the downloaded file
-    """
-    download_path = slskd_client.download_track(search_query, output_path)
-
-    if download_path is None:
-        download_path = download_track_ytdlp(search_query, output_path)
-
-    return download_path
-
 # TODO: THIS IS WHERE BETTER SEARCH WILL HAPPEN - NEED TO CONSTRUCT QUERY FROM TRACK DATA
 def download_track(slskd_client: SlskdUtils, track: SoulDB.TrackData, output_path: str) -> str:
     search_query = f"{track.title} - {', '.join([artist[0] for artist in track.artists])}"
@@ -392,48 +341,23 @@ def download_track_ytdlp(search_query: str, output_path: str) -> str :
 
     return download_path
 
-def pprint(data):
-    print(json.dumps(data, indent=4))
+def download_from_search_query(slskd_client: SlskdUtils, search_query: str, output_path: str) -> str:
+    """
+    Downloads a track from soulseek or youtube, only downloading from youtube if the query is not found on soulseek
 
-def save_json(data, filename="debug/debug.json"):
-    with open(f"debug/{filename}", "w") as file:
-        json.dump(data, file)
+    Args:
+        search_query (str): the song to download, can be a search query
+        output_path (str): the directory to download the song to
 
-# TODO: this function is slow - maybe we can make it better for that one deliverable
-def update_db_with_spotify_playlists(spotify_client: SpotifyUtils, session):
-    all_playlists = spotify_client.get_all_playlists()
+    Returns:
+        str: the path to the downloaded file
+    """
+    download_path = slskd_client.download_track(search_query, output_path)
 
-    # for debugging - if it does ur whole library it will be slow as shit, for me it took
-    # all_playlists = all_playlists[:5]
+    if download_path is None:
+        download_path = download_track_ytdlp(search_query, output_path)
 
-    for playlist in all_playlists:
-        playlist_tracks = spotify_client.get_playlist_tracks(playlist['id'])
-        relevant_tracks_data: list[SoulDB.TrackData] = spotify_client.get_data_from_playlist(playlist_tracks)
-
-        # create and flush the playlist since we need its id for the playlist_tracks association table
-        matching_playlist = session.query(SoulDB.Playlists).filter_by(spotify_id=playlist['id']).first()
-        if matching_playlist is None:
-            new_playlist = SoulDB.Playlists.add_playlist(session, playlist['id'], playlist['name'], playlist['description'], None)
-            session.add(new_playlist)
-            session.flush()
-
-        # add each track in the playlist to the database if it doesn't already exist
-        track_rows_and_data = []
-        for track_data in relevant_tracks_data:
-            existing_track_row = SoulDB.get_existing_track(session, track_data)
-            if existing_track_row is None:
-                track_data.filepath = None
-                new_track_row = SoulDB.Tracks.add_track(session, track_data)
-                playlist_track_assoc = SoulDB.PlaylistTracks(track_id=new_track_row.id, playlist_id=playlist['id'], added_at=track_data.date_liked_spotify)
-            else:
-                track_rows_and_data.append((existing_track_row, track_data))
-                playlist_track_assoc = SoulDB.PlaylistTracks(track_id=existing_track_row.id, playlist_id=playlist['id'], added_at=track_data.date_liked_spotify)
-
-            # add the track to the playlist_tracks association table
-            if matching_playlist:
-                matching_playlist.playlist_tracks.append(playlist_track_assoc)
-            else:
-                new_playlist.playlist_tracks.append(playlist_track_assoc)
+    return download_path
 
 # def createAllPlaylists(spotify_client, engine):
 #     all_playlists = spotify_client.get_all_playlists()
@@ -451,6 +375,70 @@ def update_db_with_spotify_playlists(spotify_client: SpotifyUtils, session):
 #         playlist_titles.append(playlistName)
 #         first = False
 #     # SoulDB.createPlaylistTables(playlist_titles, engine)
+
+def pprint(data):
+    print(json.dumps(data, indent=4))
+
+def save_json(data, filename="debug/debug.json"):
+    with open(f"debug/{filename}", "w") as file:
+        json.dump(data, file)
+
+def extract_file_metadata(filepath: str) -> dict:
+    """
+    Extracts metadata from a file using mutagen
+
+    Args:
+        filepath (str): the path to the file
+
+    Returns:
+        dict: a dictionary of metadata
+    """
+    audio = mutagen.File(filepath)
+
+    if not audio:
+        return None
+
+    return {
+        "title":  audio.get("title", [None])[0],
+        "artist": audio.get("artist", [None])[0],
+        "album":  audio.get("album", [None])[0],
+        "genre":  audio.get("genre", [None])[0],
+        "date":   audio.get("date", [None])[0],
+        "track":  audio.get("tracknumber", [None])[0],
+        "length": int(audio.info.length) if audio.info else None,
+    }
+
+# TODO: these functions arent being used, do we still need them?
+
+def createAllPlaylists(spotify_client, engine, session):
+    all_playlists = spotify_client.get_all_playlists()
+    save_json(all_playlists,"allPlaylists.json")
+
+    playlist_titles = []
+    playlist_songs = {}
+    
+    for playlist in all_playlists:
+        all_songs = spotify_client.get_playlist_tracks(playlist["id"])
+        playlist_title = playlist["name"]
+        playlist_songs[playlist_title] = []
+        for song in all_songs:
+            id = song['track']['id']
+            if id != None:
+                add_track_from_data(song['track'], session, spotify_client)
+                playlist_songs[playlist_title].append(id)
+        playlist_titles.append(playlist_title)
+        # if i == 2:
+        #     break
+    playlist_dict = SoulDB.createPlaylistTables(playlist_titles, playlist_songs, engine, session)
+    
+    # results = session.query(playlist_dict["Gym?!"]).all()
+    # for r in results:
+    #     print(r.song_id)
+    
+def add_track_from_data(track, session, client):
+    # track = client.get_track(id)
+    artists = [(artist["name"], artist["id"]) for artist in track["artists"]]
+    SoulDB.Tracks.add_track(session=session, spotify_id=track['id'],title=track['name'],artists=artists,release_date=track['album']['release_date'],explicit=track['explicit'], album=track['album']['name'])
 
 if __name__ == "__main__":
     main()
