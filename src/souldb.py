@@ -68,10 +68,10 @@ class Tracks(Base):
 
     @classmethod
     def add_track(cls, session, track_data: TrackData):
-        if track_data.spotify_id is None:
-            existing_track = session.query(Tracks).filter_by(filepath=track_data.filepath).first()
-        else:
+        if track_data.spotify_id is not None:
             existing_track = session.query(Tracks).filter_by(spotify_id=track_data.spotify_id).first()
+        else:
+            existing_track = session.query(Tracks).filter_by(title=track_data.title).first()
 
         if existing_track is not None:
             print(f"Track ({track_data.title} - {track_data.artists}) already exists in the database - not adding")
