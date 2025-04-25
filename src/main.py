@@ -158,38 +158,6 @@ def scan_music_library(sql_session, music_dir: str):
                 if existing_track is None:
                     SoulDB.Tracks.add_track(sql_session, track_data)
 
-def update_db_with_spotify_playlist(sql_session, spotify_client, playlist_metadata):
-    playlist_tracks = spotify_client.get_playlist_tracks(playlist_metadata['id'])
-    relevant_tracks_data: list[SoulDB.TrackData] = spotify_client.get_data_from_playlist(playlist_tracks)
-
-    # create and flush the playlist since we need its id for the playlist_tracks association table
-    playlist_row = sql_session.query(SoulDB.Playlists).filter_by(spotify_id=playlist_metadata['id']).first()
-    if playlist_row is None:
-        playlist_row = SoulDB.Playlists.add_playlist(sql_session, playlist_metadata['id'], playlist_metadata['name'], playlist_metadata['description'], None)
-        sql_session.add(playlist_row)
-        sql_session.flush()
-
-    # add each track in the playlist to the database if it doesn't already exist
-    for track_data in relevant_tracks_data:
-        existing_track_row = SoulDB.get_existing_track(sql_session, track_data)
-        if existing_track_row:
-            playlist_track_assoc = SoulDB.PlaylistTracks(track_id=existing_track_row.id, playlist_id=playlist_row.id, added_at=track_data.date_liked_spotify)
-        else:
-            new_track_row = SoulDB.Tracks.add_track(sql_session, track_data)
-            playlist_track_assoc = SoulDB.PlaylistTracks(track_id=new_track_row.id, playlist_id=playlist_row.id, added_at=track_data.date_liked_spotify)
-
-        existing_assoc = sql_session.query(SoulDB.PlaylistTracks).filter_by(
-            playlist_id=playlist_row.id,
-            track_id=(new_track_row.id if existing_track_row is None else existing_track_row.id),
-            added_at=track_data.date_liked_spotify
-        ).first()
-
-        # add the track to the playlist_tracks association table is its not already present
-        if existing_assoc is None:
-            playlist_row.playlist_tracks.append(playlist_track_assoc)
-
-        sql_session.flush()
-
 def update_db_with_all_spotify_data(sql_session, spotify_client):
     """
     Updates the database with the data from spotify
@@ -206,6 +174,22 @@ def update_db_with_all_spotify_data(sql_session, spotify_client):
 
     update_db_with_spotify_liked_tracks(spotify_client, sql_session)
 
+def update_db_with_spotify_playlist(sql_session, spotify_client, playlist_metadata):
+    playlist_tracks = spotify_client.get_playlist_tracks(playlist_metadata['id'])
+    relevant_tracks_data: list[SoulDB.TrackData] = spotify_client.get_data_from_playlist(playlist_tracks)
+
+    # create and flush the playlist since we need its id for the playlist_tracks association table
+    playlist_row = sql_session.query(SoulDB.Playlists).filter_by(spotify_id=playlist_metadata['id']).first()
+    if playlist_row is None:
+        playlist_row = SoulDB.Playlists.add_playlist(sql_session, playlist_metadata['id'], playlist_metadata['name'], playlist_metadata['description'], None)
+        sql_session.add(playlist_row)
+        sql_session.flush()
+
+    # add each track in the playlist to the database if it doesn't already exist
+    for track_data in relevant_tracks_data:
+        add_track_data_to_playlist(sql_session, track_data, playlist_row)
+        sql_session.flush()
+
 def update_db_with_spotify_liked_tracks(spotify_client: SpotifyUtils, sql_session):
     liked_tracks_data = spotify_client.get_liked_tracks()
     relevant_tracks_data: list[SoulDB.TrackData] = spotify_client.get_data_from_playlist(liked_tracks_data)
@@ -219,23 +203,26 @@ def update_db_with_spotify_liked_tracks(spotify_client: SpotifyUtils, sql_sessio
     # add each track in the users liked songs to the database if it doesn't already exist
     # TODO: we can prolly optimize this for fp deliverable
     for track_data in relevant_tracks_data:
-        # prolly a faster way than doing this
-        existing_track_row = SoulDB.get_existing_track(sql_session, track_data)
-        if existing_track_row:
-            playlist_track_assoc = SoulDB.PlaylistTracks(track_id=existing_track_row.id, playlist_id=liked_playlist.id, added_at=track_data.date_liked_spotify)
-        else:
-            # our add_track function is prolly also dookie
-            new_track_row = SoulDB.Tracks.add_track(sql_session, track_data)
-            playlist_track_assoc = SoulDB.PlaylistTracks(track_id=new_track_row.id, playlist_id=liked_playlist.id, added_at=track_data.date_liked_spotify)
+        add_track_data_to_playlist(sql_session, track_data, liked_playlist)
 
-        existing_assoc = sql_session.query(SoulDB.PlaylistTracks).filter_by(
-            playlist_id=liked_playlist.id,
-            track_id=(new_track_row.id if existing_track_row is None else existing_track_row.id),
-            added_at=track_data.date_liked_spotify
-        ).first()
+def add_track_data_to_playlist(sql_session, track_data: SoulDB.TrackData, playlist_row: SoulDB.Playlists):
+    # prolly a faster way than doing this
+    existing_track_row = SoulDB.get_existing_track(sql_session, track_data)
+    if existing_track_row:
+        playlist_track_assoc = SoulDB.PlaylistTracks(track_id=existing_track_row.id, playlist_id=playlist_row.id, added_at=track_data.date_liked_spotify)
+    else:
+        # our add_track function is prolly also dookie
+        new_track_row = SoulDB.Tracks.add_track(sql_session, track_data)
+        playlist_track_assoc = SoulDB.PlaylistTracks(track_id=new_track_row.id, playlist_id=playlist_row.id, added_at=track_data.date_liked_spotify)
 
-        if existing_assoc is None:
-            liked_playlist.playlist_tracks.append(playlist_track_assoc)
+    existing_assoc = sql_session.query(SoulDB.PlaylistTracks).filter_by(
+        playlist_id=playlist_row.id,
+        track_id=(new_track_row.id if existing_track_row is None else existing_track_row.id),
+        added_at=track_data.date_liked_spotify
+    ).first()
+
+    if existing_assoc is None:
+        playlist_row.playlist_tracks.append(playlist_track_assoc)
 
 # TODO: both of these functions need to be rewritten since we are now downloading by searching the database for null filepaths (W)
 
