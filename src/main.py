@@ -370,7 +370,6 @@ def download_from_search_query(slskd_client: SlskdUtils, search_query: str, outp
 
     return download_path
 
-
 def pprint(data):
     print(json.dumps(data, indent=4))
 
@@ -402,38 +401,6 @@ def extract_file_metadata(filepath: str) -> dict:
         "track":  audio.get("tracknumber", [None])[0],
         "length": int(audio.info.length) if audio.info else None,
     }
-
-# TODO: these functions arent being used, do we still need them?
-
-def createAllPlaylists(spotify_client, engine, session):
-    all_playlists = spotify_client.get_all_playlists()
-    save_json(all_playlists,"allPlaylists.json")
-
-    playlist_titles = []
-    playlist_songs = {}
-    
-    for playlist in all_playlists:
-        all_songs = spotify_client.get_playlist_tracks(playlist["id"])
-        playlist_title = playlist["name"]
-        playlist_songs[playlist_title] = []
-        for song in all_songs:
-            id = song['track']['id']
-            if id != None:
-                add_track_from_data(song['track'], session, spotify_client)
-                playlist_songs[playlist_title].append(id)
-        playlist_titles.append(playlist_title)
-        # if i == 2:
-        #     break
-    playlist_dict = SoulDB.createPlaylistTables(playlist_titles, playlist_songs, engine, session)
-    
-    # results = session.query(playlist_dict["Gym?!"]).all()
-    # for r in results:
-    #     print(r.song_id)
-    
-def add_track_from_data(track, session, client):
-    # track = client.get_track(id)
-    artists = [(artist["name"], artist["id"]) for artist in track["artists"]]
-    SoulDB.Tracks.add_track(session=session, spotify_id=track['id'],title=track['name'],artists=artists,release_date=track['album']['release_date'],explicit=track['explicit'], album=track['album']['name'])
 
 if __name__ == "__main__":
     main()
