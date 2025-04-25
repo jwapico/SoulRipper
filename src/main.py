@@ -364,22 +364,6 @@ def download_from_search_query(slskd_client: SlskdUtils, search_query: str, outp
 
     return download_path
 
-# def createAllPlaylists(spotify_client, engine):
-#     all_playlists = spotify_client.get_all_playlists()
-#     save_json(all_playlists,"allPlaylists.json")
-
-#     playlist_titles = []
-#     first = True
-#     for playlist in all_playlists:
-        
-#         all_songs = spotify_client.get_all_playlist_tracks(playlist["id"])
-#         playlistName = playlist["name"]
-#         if first == True: 
-#             save_json(all_songs, f"allSongs{playlistName}")
-#             save_json(spotify_client.get_track(all_songs[0]['track']['id']), "Footage!")
-#         playlist_titles.append(playlistName)
-#         first = False
-#     # SoulDB.createPlaylistTables(playlist_titles, engine)
 
 def pprint(data):
     print(json.dumps(data, indent=4))
