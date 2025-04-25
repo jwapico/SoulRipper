@@ -50,6 +50,7 @@ class TrackData:
 
 # table with info about every single track and file in the library
 # TODO: add downloaded_with column to indicate whether the track was downloaded with slskd or yt-dlp
+# TODO: i think the date_liked_spotify field is reduntant since we should have a playlist for every track that was liked on spotify with the date added there
 class Tracks(Base):
     __tablename__ = "tracks"
     id = sqla.Column(sqla.Integer, primary_key=True)
@@ -112,13 +113,13 @@ class Tracks(Base):
 class Playlists(Base):
     __tablename__ = "playlists"
     id = sqla.Column(sqla.Integer, primary_key=True)
-    spotify_id = sqla.Column(sqla.String, nullable=False, unique=True)
+    spotify_id = sqla.Column(sqla.String, nullable=True, unique=True)
     name = sqla.Column(sqla.String, nullable=False)
     description = sqla.Column(sqla.String, nullable=True)
     playlist_tracks = sqla.orm.relationship("PlaylistTracks", back_populates="playlist", cascade="all, delete-orphan")
 
     @classmethod
-    def add_playlist(cls, session, spotify_id, name, description, track_rows_and_data):
+    def add_playlist(cls, session, spotify_id, name, description, track_rows_and_data=None):
         # create the new_playlist table, add it and flush it so we can access the generated id
         new_playlist = cls(spotify_id=spotify_id, name=name, description=description)
         session.add(new_playlist)
@@ -126,12 +127,14 @@ class Playlists(Base):
 
         # get track objects for each id and add them with their date_added to the playlist_tracks association table
         # TODO: we need to do this each time a track is added, not all at the end of the playlist - i think this is a larger refactor and dgaf rn B=D
-        for track_row, track_data in track_rows_and_data:
-            playlist_track_assoc = PlaylistTracks(track_id=track_row.id, playlist_id=new_playlist.id, added_at=track_data.date_liked_spotify)
-            new_playlist.playlist_tracks.append(playlist_track_assoc)
+        # for track_row, track_data in track_rows_and_data:
+        #     playlist_track_assoc = PlaylistTracks(track_id=track_row.id, playlist_id=new_playlist.id, added_at=track_data.date_liked_spotify)
+        #     new_playlist.playlist_tracks.append(playlist_track_assoc)
 
         session.add(new_playlist)
         session.commit()
+
+        return new_playlist
 
 # association table that creates a many-to-many relationship between playlists and tracks with extra attributes
 class PlaylistTracks(Base):
