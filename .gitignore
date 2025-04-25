@@ -186,3 +186,4 @@ assets/slskd.yml
 *.json
 assets/soul.db
 *.DS_Store
+assets/soul.db-journal

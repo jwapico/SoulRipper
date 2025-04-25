@@ -125,6 +125,9 @@ def main():
     # add_tracks_from_music_dir("music", sql_session)
     # createAllPlaylists(spotify_client, engine, sql_session)
  
+def download_entire_library(slskd_client: SlskdUtils, sql_session: Session, output_path: str):
+    pass
+
 # TODO: this function technically kinda works but we need a better way to extract metadata from the files - most files (all downloaded by yt-dlp) have None for all fields except filepath :/
 #   - maybe we can extract info from filename
 #   - we should probably populate metadata using TrackData from database or Spotify API - this is a lot of work dgaf rn lol
@@ -182,6 +185,7 @@ def update_db_with_all_spotify_data(sql_session, spotify_client):
         existing_track_row = SoulDB.get_existing_track(sql_session, track_data)
         if existing_track_row:
             playlist_track_assoc = SoulDB.PlaylistTracks(track_id=existing_track_row.id, playlist_id=None, added_at=track_data.date_liked_spotify)
+            track_rows_and_data.append((existing_track_row, track_data))
         else:
             # our add_track function is prolly also dookie
             new_track_row = SoulDB.Tracks.add_track(sql_session, track_data)
@@ -288,7 +292,7 @@ def download_playlist(slskd_client: SlskdUtils, spotify_client: SpotifyUtils, sq
     if existing_playlist is None:
         SoulDB.Playlists.add_playlist(sql_session, playlist_id, playlist_info["name"], playlist_info["description"], track_rows_and_data)
 
-# TODO: THIS IS WHERE BETTER SEARCH WILL HAPPEN - NEED TO CONSTRUCT QUERY FROM TRACK DATA
+# TODO: this is where better search will happen - construct query from trackdata
 def download_track(slskd_client: SlskdUtils, track: SoulDB.TrackData, output_path: str) -> str:
     search_query = f"{track.title} - {', '.join([artist[0] for artist in track.artists])}"
     download_path = download_from_search_query(slskd_client, search_query, output_path)
