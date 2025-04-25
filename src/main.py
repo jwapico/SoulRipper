@@ -117,8 +117,7 @@ def main():
         download_playlist(slskd_client, spotify_client, sql_session, SPOTIFY_PLAYLIST_URL, OUTPUT_PATH)
 
     start_time = time.time()
-    # update_db_with_all_spotify_data(sql_session, spotify_client)
-    update_db_with_spotify_playlists(spotify_client, sql_session)
+    update_db_with_all_spotify_data(sql_session, spotify_client)
     sql_session.commit()
     end_time = time.time()
     print(f"Time taken to update database with all spotify data: {(end_time - start_time) / 60} min")
@@ -159,6 +158,38 @@ def scan_music_library(sql_session, music_dir: str):
                 if existing_track is None:
                     SoulDB.Tracks.add_track(sql_session, track_data)
 
+def update_db_with_spotify_playlist(sql_session, spotify_client, playlist_metadata):
+    playlist_tracks = spotify_client.get_playlist_tracks(playlist_metadata['id'])
+    relevant_tracks_data: list[SoulDB.TrackData] = spotify_client.get_data_from_playlist(playlist_tracks)
+
+    # create and flush the playlist since we need its id for the playlist_tracks association table
+    playlist_row = sql_session.query(SoulDB.Playlists).filter_by(spotify_id=playlist_metadata['id']).first()
+    if playlist_row is None:
+        playlist_row = SoulDB.Playlists.add_playlist(sql_session, playlist_metadata['id'], playlist_metadata['name'], playlist_metadata['description'], None)
+        sql_session.add(playlist_row)
+        sql_session.flush()
+
+    # add each track in the playlist to the database if it doesn't already exist
+    for track_data in relevant_tracks_data:
+        existing_track_row = SoulDB.get_existing_track(sql_session, track_data)
+        if existing_track_row:
+            playlist_track_assoc = SoulDB.PlaylistTracks(track_id=existing_track_row.id, playlist_id=playlist_row.id, added_at=track_data.date_liked_spotify)
+        else:
+            new_track_row = SoulDB.Tracks.add_track(sql_session, track_data)
+            playlist_track_assoc = SoulDB.PlaylistTracks(track_id=new_track_row.id, playlist_id=playlist_row.id, added_at=track_data.date_liked_spotify)
+
+        existing_assoc = sql_session.query(SoulDB.PlaylistTracks).filter_by(
+            playlist_id=playlist_row.id,
+            track_id=(new_track_row.id if existing_track_row is None else existing_track_row.id),
+            added_at=track_data.date_liked_spotify
+        ).first()
+
+        # add the track to the playlist_tracks association table is its not already present
+        if existing_assoc is None:
+            playlist_row.playlist_tracks.append(playlist_track_assoc)
+
+        sql_session.flush()
+
 def update_db_with_all_spotify_data(sql_session, spotify_client):
     """
     Updates the database with the data from spotify
@@ -168,49 +199,12 @@ def update_db_with_all_spotify_data(sql_session, spotify_client):
         spotify_client (SpotifyUtils): the spotify client to use
     """
 
-    update_db_with_spotify_playlists(spotify_client, sql_session)
+    # get all playlists from spotify and add them to the database
+    all_playlists_metadata = spotify_client.get_all_playlists()
+    for playlist_metadata in all_playlists_metadata:
+        update_db_with_spotify_playlist(sql_session, spotify_client, playlist_metadata)
+
     update_db_with_spotify_liked_tracks(spotify_client, sql_session)
-
-# TODO: this function is slow - maybe we can make it better for that one deliverable
-def update_db_with_spotify_playlists(spotify_client: SpotifyUtils, session):
-    all_playlists = spotify_client.get_all_playlists()
-
-    # for debugging - if it does ur whole library it will be slow as shit, for me it took
-    all_playlists = all_playlists[:5]
-
-    for playlist_data in all_playlists:
-        playlist_tracks = spotify_client.get_playlist_tracks(playlist_data['id'])
-        relevant_tracks_data: list[SoulDB.TrackData] = spotify_client.get_data_from_playlist(playlist_tracks)
-
-        # create and flush the playlist since we need its id for the playlist_tracks association table
-        playlist_row = session.query(SoulDB.Playlists).filter_by(spotify_id=playlist_data['id']).first()
-        if playlist_row is None:
-            playlist_row = SoulDB.Playlists.add_playlist(session, playlist_data['id'], playlist_data['name'], playlist_data['description'], None)
-            session.add(playlist_row)
-            session.flush()
-
-        # add each track in the playlist to the database if it doesn't already exist
-        track_rows_and_data = []
-        for track_data in relevant_tracks_data:
-            existing_track_row = SoulDB.get_existing_track(session, track_data)
-            if existing_track_row is None:
-                track_data.filepath = None
-                new_track_row = SoulDB.Tracks.add_track(session, track_data)
-                playlist_track_assoc = SoulDB.PlaylistTracks(track_id=new_track_row.id, playlist_id=playlist_row.id, added_at=track_data.date_liked_spotify)
-            else:
-                track_rows_and_data.append((existing_track_row, track_data))
-                playlist_track_assoc = SoulDB.PlaylistTracks(track_id=existing_track_row.id, playlist_id=playlist_row.id, added_at=track_data.date_liked_spotify)
-
-            existing_assoc = session.query(SoulDB.PlaylistTracks).filter_by(
-                playlist_id=playlist_row.id,
-                track_id=(new_track_row.id if existing_track_row is None else existing_track_row.id),
-                added_at=track_data.date_liked_spotify
-            ).first()
-
-            # add the track to the playlist_tracks association table is its not already present
-            if existing_assoc is None:
-                playlist_row.playlist_tracks.append(playlist_track_assoc)
-
 
 def update_db_with_spotify_liked_tracks(spotify_client: SpotifyUtils, sql_session):
     liked_tracks_data = spotify_client.get_liked_tracks()
@@ -224,21 +218,24 @@ def update_db_with_spotify_liked_tracks(spotify_client: SpotifyUtils, sql_sessio
 
     # add each track in the users liked songs to the database if it doesn't already exist
     # TODO: we can prolly optimize this for fp deliverable
-    track_rows_and_data = []
     for track_data in relevant_tracks_data:
         # prolly a faster way than doing this
         existing_track_row = SoulDB.get_existing_track(sql_session, track_data)
         if existing_track_row:
             playlist_track_assoc = SoulDB.PlaylistTracks(track_id=existing_track_row.id, playlist_id=liked_playlist.id, added_at=track_data.date_liked_spotify)
-            track_rows_and_data.append((existing_track_row, track_data))
         else:
             # our add_track function is prolly also dookie
             new_track_row = SoulDB.Tracks.add_track(sql_session, track_data)
             playlist_track_assoc = SoulDB.PlaylistTracks(track_id=new_track_row.id, playlist_id=liked_playlist.id, added_at=track_data.date_liked_spotify)
-            track_rows_and_data.append((new_track_row, track_data))
-            
 
-        liked_playlist.playlist_tracks.append(playlist_track_assoc)
+        existing_assoc = sql_session.query(SoulDB.PlaylistTracks).filter_by(
+            playlist_id=liked_playlist.id,
+            track_id=(new_track_row.id if existing_track_row is None else existing_track_row.id),
+            added_at=track_data.date_liked_spotify
+        ).first()
+
+        if existing_assoc is None:
+            liked_playlist.playlist_tracks.append(playlist_track_assoc)
 
 # TODO: both of these functions need to be rewritten since we are now downloading by searching the database for null filepaths (W)
 
@@ -370,6 +367,22 @@ def download_from_search_query(slskd_client: SlskdUtils, search_query: str, outp
 
     return download_path
 
+# def createAllPlaylists(spotify_client, engine):
+#     all_playlists = spotify_client.get_all_playlists()
+#     save_json(all_playlists,"allPlaylists.json")
+
+#     playlist_titles = []
+#     first = True
+#     for playlist in all_playlists:
+        
+#         all_songs = spotify_client.get_all_playlist_tracks(playlist["id"])
+#         playlistName = playlist["name"]
+#         if first == True: 
+#             save_json(all_songs, f"allSongs{playlistName}")
+#             save_json(spotify_client.get_track(all_songs[0]['track']['id']), "Footage!")
+#         playlist_titles.append(playlistName)
+#         first = False
+#     # SoulDB.createPlaylistTables(playlist_titles, engine)
 
 def pprint(data):
     print(json.dumps(data, indent=4))
