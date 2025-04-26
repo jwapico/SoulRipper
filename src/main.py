@@ -190,8 +190,7 @@ def update_db_with_spotify_liked_tracks(spotify_client: SpotifyUtils, sql_sessio
     add_track_data_to_playlist(sql_session, relevant_tracks_data, liked_playlist)
 
 def add_track_data_to_playlist(sql_session, track_data_list: list[SoulDB.TrackData], playlist_row: SoulDB.Playlists):
-    # prolly a faster way than doing this
-    #adslfjasl;k fdsalkj fsdlkasj dliafsd jdafils hasdjh dfga;li
+
     existing_keys = set(
         (spotify_id, title, album)
         for spotify_id, title, album in sql_session.query(
@@ -200,8 +199,14 @@ def add_track_data_to_playlist(sql_session, track_data_list: list[SoulDB.TrackDa
             SoulDB.Tracks.album
         ).all()
     )
-    # tracks = set(client.get_data_from_playlist(sql_session.query(SoulDB.Tracks).all()))
 
+    new_tracks = set()
+    for track_data in track_data_list:
+        if (track_data.spotify_id, track_data.title, track_data.album) not in existing_keys:
+            new_tracks.add(track_data)
+            
+    SoulDB.Tracks.bulk_add_tracks(sql_session,new_tracks)
+    
     existing_assoc_keys = set(
         (playlist_id, track_id)
         for playlist_id, track_id in sql_session.query(
@@ -209,14 +214,6 @@ def add_track_data_to_playlist(sql_session, track_data_list: list[SoulDB.TrackDa
             SoulDB.PlaylistTracks.track_id
         ).all()
     )
-    new_tracks = set()
-    for track_data in track_data_list:
-        if (track_data.spotify_id, track_data.title, track_data.album) not in existing_keys and track_data not in new_tracks:
-            new_tracks.add(track_data)
-            
-    SoulDB.Tracks.bulk_add_tracks(sql_session,new_tracks)
-    
-    
     for track_data in track_data_list:
         track = SoulDB.get_existing_track(sql_session,track_data)
         if track:
@@ -226,24 +223,6 @@ def add_track_data_to_playlist(sql_session, track_data_list: list[SoulDB.TrackDa
                 playlist_row.playlist_tracks.append(assoc)
         else:
             print("Error")
-    # prolly a faster way than doing this
-    # existing_track_row = SoulDB.get_existing_track(sql_session, track_data)
-    # if existing_track_row:
-    #     playlist_track_assoc = SoulDB.PlaylistTracks(track_id=existing_track_row.id, playlist_id=playlist_row.id, added_at=track_data.date_liked_spotify)
-    # else:
-    #     print(f"Adding track {track_data.title} to playlist {playlist_row.name}...")
-    #     # our add_track function is prolly also dookie
-    #     new_track_row = SoulDB.Tracks.add_track(sql_session, track_data)
-    #     playlist_track_assoc = SoulDB.PlaylistTracks(track_id=new_track_row.id, playlist_id=playlist_row.id, added_at=track_data.date_liked_spotify)
-
-    # existing_assoc = sql_session.query(SoulDB.PlaylistTracks).filter_by(
-    #     playlist_id=playlist_row.id,
-    #     track_id=(new_track_row.id if existing_track_row is None else existing_track_row.id),
-    #     added_at=track_data.date_liked_spotify
-    # ).first()
-
-    # if existing_assoc is None:
-    #     playlist_row.playlist_tracks.append(playlist_track_assoc)
 
 # ===========================================
 #       interesting and complex queries

@@ -37,7 +37,7 @@ class TrackData:
     comments: str = None
     
     def __hash__(self):
-        return hash((self.spotify_id, self.album, self.title))
+        return hash((self.spotify_id, self.album, self.title, self.filepath))
 
 # table with info about every single track and file in the library
 # TODO: i think the date_liked_spotify field is reduntant since we should have a playlist for every track that was liked on spotify with the date added there
@@ -200,33 +200,6 @@ class UserInfo(Base):
         new_user = cls(username=username, spotify_id=spotify_id, spotify_client_id=spotify_client_id, spotify_client_secret=spotify_client_secret)
         session.add(new_user)
         session.flush()
-
-def createPlaylistTables(playlists, playlist_songs, engine, session):
-    # dropAllPlaylists(playlists, engine)
-    playlist_tables = []
-    tables_dict = {}
-    for playlist in playlists:
-        attr_dict = {'__tablename__': playlist, 'song_id': sqla.Column(sqla.String, primary_key=True)}
-        current_playlist = type(playlist, (Base,), attr_dict)
-        playlist_tables.append(current_playlist)
-        tables_dict[playlist] = current_playlist
-        
-    Base.metadata.create_all(bind=engine)
-    for playlist in playlists:
-        for song in playlist_songs[playlist]:
-            add_song_to_playlist(tables_dict[playlist], song, session)
-        
-    return tables_dict
-
-def dropAllPlaylists(playlists, engine):
-    metadata = sqla.MetaData()
-    metadata.reflect(bind=engine)
-    tables_to_drop = []
-    for playlist in playlists:
-        table_to_drop = metadata.tables.get(playlist)
-        if table_to_drop is not None:
-            tables_to_drop.append(table_to_drop)
-    Base.metadata.drop_all(engine, tables_to_drop, checkfirst=True)
 
 def get_existing_track(session, track: TrackData):
     if track.spotify_id is not None:
