@@ -28,6 +28,19 @@ import souldb as SoulDB
 #       - https://www.discogs.com/developers/
 #       - big list here: https://soundcharts.com/blog/music-data-api
 
+
+
+
+
+
+
+
+
+# TODO: i THINK this is all of the main database code we need to our submission, the only thing missing at the time of writing is the performance tuning stuff
+# heavy on the 'i think' tho we should prolly discuss this as a group
+#   - currently all we do is populate the database with the users local music directory as well as their stuff from spotify, then display some statistics
+#       - tho we do have functionality for a user to add a new track through --add-track (let me know if anyone has any more ideas for submission functionality)
+
 def main():
     # collect commandline arguments
     parser = argparse.ArgumentParser(description="")
