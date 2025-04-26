@@ -35,10 +35,12 @@ def main():
     parser.add_argument("--music-dir", type=str, dest="music_dir", help="The location of your music directory")
     parser.add_argument("--debug", action="store_true", help="Enable debug statements")
     parser.add_argument("--drop-database", action="store_true", help="Drop the database before running the program")
+    parser.add_argument("--add-track", type=str, help="Add a track to the database - provide the filepath")
     args = parser.parse_args()
     DEBUG = args.debug
     DROP_DATABASE = args.drop_database
     OUTPUT_PATH = args.music_dir if args.music_dir else args.pos_music_dir
+    NEW_TRACK_FILEPATH = args.add_track
 
     dotenv.load_dotenv()
 
@@ -71,6 +73,9 @@ def main():
     matching_user = sql_session.query(SoulDB.UserInfo).filter_by(spotify_id=SPOTIFY_USER_ID).first()
     if matching_user is None:
         SoulDB.UserInfo.add_user(sql_session, SPOTIFY_USERNAME, SPOTIFY_USER_ID, SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET)
+
+    if NEW_TRACK_FILEPATH:
+        add_new_track_to_db(sql_session, NEW_TRACK_FILEPATH)
 
     # populate the database with metadata found from files in the users output directory
     scan_music_library(sql_session, OUTPUT_PATH)
@@ -105,18 +110,7 @@ def scan_music_library(sql_session, music_dir: str):
             # TODO: these extensions should be configured with the config file (still need to implement config file </3)
             if file.endswith(".mp3") or file.endswith(".flac") or file.endswith(".wav"):
                 filepath = os.path.abspath(os.path.join(root, file))
-                # TODO: look at metadata to see what else we can extract - it's different for each file :( - need to find file with great metadata as example
-                file_track_data = extract_file_metadata(filepath)
-
-                if file_track_data is None:
-                    print(f"No metadata found in file {filepath}, skipping...")
-                    continue
-
-                print(f"Found track with data: {file_track_data}, adding to database...")
-    
-                existing_track = SoulDB.get_existing_track(sql_session, file_track_data)
-                if existing_track is None:
-                    SoulDB.Tracks.add_track(sql_session, file_track_data)
+                add_new_track_to_db(sql_session, filepath)
 
     sql_session.flush()
 
@@ -180,6 +174,7 @@ def save_json(data, filename="debug/debug.json"):
     with open(f"debug/{filename}", "w") as file:
         json.dump(data, file)
 
+# TODO: look at metadata to see what else we can extract - it's different for each file :( - need to find file with great metadata as example
 def extract_file_metadata(filepath: str) -> SoulDB.TrackData:
     """
     Extracts metadata from a file using mutagen
@@ -213,9 +208,26 @@ def extract_file_metadata(filepath: str) -> SoulDB.TrackData:
 
         return track_data
 
-# ================================
-#       interesting queries
-# ================================
+def add_new_track_to_db(sql_session, filepath: str):
+    if not os.path.exists(filepath):
+        print(f"File {filepath} does not exist, skipping...")
+        return
+
+    file_track_data = extract_file_metadata(filepath)
+
+    if file_track_data is None:
+        print(f"No metadata found in file {filepath}, skipping...")
+        file_track_data = SoulDB.TrackData(filepath=filepath, comments="WARNING: Error while extracting metadata. This likely means the file is corrupted or empty")
+
+    print(f"Found track with data: {file_track_data}, adding to database...")
+
+    existing_track = SoulDB.get_existing_track(sql_session, file_track_data)
+    if existing_track is None:
+        SoulDB.Tracks.add_track(sql_session, file_track_data)
+
+# ===========================================
+#       interesting and complex queries
+# ===========================================
 
 # Simple filter query
 def get_missing_tracks(sql_session):
@@ -401,7 +413,7 @@ def get_top_3_tracks_per_artist(sql_session):
     return rows
 
 def execute_all_interesting_queries(sql_session):
-    print("Executing interesting queries:")
+    input("Executing all interesting and complex queries, press enter to begin")
 
     get_missing_tracks(sql_session)
     input("Press enter to execute next query")
