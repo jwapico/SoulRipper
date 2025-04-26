@@ -100,7 +100,15 @@ def main():
         update_db_with_spotify_playlist(sql_session, spotify_client, playlist_metadata)
 
     # add the users liked songs to the database
+    start_time = time.perf_counter()
+
     update_db_with_spotify_liked_tracks(spotify_client, sql_session)
+    sql_session.flush()
+    sql_session.commit()
+    
+    end_time = time.perf_counter()
+    execution_time = end_time - start_time
+    print(f"Seconds: {execution_time}")
 
     sql_session.flush()
     sql_session.commit()
