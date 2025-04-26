@@ -103,19 +103,6 @@ def main():
     # populate the database with metadata found from files in the users output directory
     # scan_music_library(sql_session, OUTPUT_PATH)
 
-    # if a search query is provided, download the track
-    if SEARCH_QUERY:
-        output_path = download_from_search_query(slskd_client, SEARCH_QUERY, OUTPUT_PATH)
-        # TODO: get metadata and insert into database
-
-    # if the update liked flag is provided, download all liked songs from spotify
-    if UPDATE_LIKED:
-        download_liked_tracks(slskd_client, spotify_client, sql_session, OUTPUT_PATH)
-    
-    # if a playlist url is provided, download the playlist
-    if SPOTIFY_PLAYLIST_URL:
-        download_playlist(slskd_client, spotify_client, sql_session, SPOTIFY_PLAYLIST_URL, OUTPUT_PATH)
-
     start_time = time.time()
     update_db_with_all_spotify_data(sql_session, spotify_client)
     sql_session.commit()
