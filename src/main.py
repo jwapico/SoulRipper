@@ -162,9 +162,9 @@ def update_db_with_spotify_playlist(sql_session, spotify_client, playlist_metada
         sql_session.flush()
 
     # add each track in the playlist to the database if it doesn't already exist
-    for track_data in relevant_tracks_data:
-        add_track_data_to_playlist(sql_session, track_data, playlist_row)
-        sql_session.flush()
+    # for track_data in relevant_tracks_data:
+    add_track_data_to_playlist(sql_session, relevant_tracks_data, playlist_row)
+    sql_session.flush()
 
 def update_db_with_spotify_liked_tracks(spotify_client: SpotifyUtils, sql_session):
     liked_tracks_data = spotify_client.get_liked_tracks()
@@ -178,10 +178,10 @@ def update_db_with_spotify_liked_tracks(spotify_client: SpotifyUtils, sql_sessio
 
     # add each track in the users liked songs to the database if it doesn't already exist
     # TODO: we can prolly optimize this for fp deliverable
-    for track_data in relevant_tracks_data:
-        add_track_data_to_playlist(sql_session, track_data, liked_playlist)
+    # for track_data in relevant_tracks_data:
+    add_track_data_to_playlist(sql_session, relevant_tracks_data, liked_playlist)
 
-def add_track_data_to_playlist(sql_session, track_data: SoulDB.TrackData, playlist_row: SoulDB.Playlists):
+def add_track_data_to_playlist(sql_session, track_data_list: list[SoulDB.TrackData], playlist_row: SoulDB.Playlists):
     # prolly a faster way than doing this
     #adslfjasl;k fdsalkj fsdlkasj dliafsd jdafils hasdjh dfga;li
     existing_keys = set(

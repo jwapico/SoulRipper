@@ -35,6 +35,9 @@ class TrackData:
     date_liked_spotify: str = None
     explicit: bool = None
     comments: str = None
+    
+    def __hash__(self):
+        return hash((self.spotify_id, self.album, self.title))
 
 # table with info about every single track and file in the library
 # TODO: i think the date_liked_spotify field is reduntant since we should have a playlist for every track that was liked on spotify with the date added there
@@ -92,6 +95,51 @@ class Tracks(Base):
 
         session.flush()
         return track
+    
+    def bulk_add_tracks(session, track_data_list: set[TrackData]):
+        # Preload existing artists
+        existing_artists = {
+            artist.name: artist
+            for artist in session.query(Artist).all()
+        }
+
+        new_tracks = []
+        new_track_artist_associations = []
+
+        for track_data in track_data_list:
+            # Create new Track object
+            track = Tracks(
+                spotify_id=track_data.spotify_id,
+                filepath=track_data.filepath,
+                title=track_data.title,
+                album=track_data.album,
+                release_date=track_data.release_date,
+                explicit=track_data.explicit,
+                date_liked_spotify=track_data.date_liked_spotify,
+                comments=track_data.comments
+            )
+            new_tracks.append(track)
+
+            # Link artists
+            if track_data.artists:
+                for name, artist_spotify_id in track_data.artists:
+                    artist = existing_artists.get(name)
+                    if artist is None:
+                        artist = Artist(name=name, spotify_id=artist_spotify_id)
+                        session.add(artist)
+                        session.flush()  # Get the new artist.id
+                        existing_artists[name] = artist  # Add to cache
+
+                    assoc = TrackArtist(track=track, artist=artist)
+                    new_track_artist_associations.append(assoc)
+
+        # Now add everything in one shot
+        session.add_all(new_tracks)
+        session.add_all(new_track_artist_associations)
+        session.flush()
+
+        print(f"Inserted {len(new_tracks)} new tracks.")
+
 
 # table with info about every single playlist in the library
 class Playlists(Base):
