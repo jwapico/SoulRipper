@@ -106,6 +106,10 @@ def main():
     sql_session.commit()
     execute_all_interesting_queries(sql_session)
 
+# ===========================================
+#          main database functions
+# ===========================================
+
 # TODO: this function technically kinda works but we need a better way to extract metadata from the files - most files (all downloaded by yt-dlp) have None for all fields except filepath :/
 #   - maybe we can extract info from filename
 #   - we should probably populate metadata using TrackData from database or Spotify API - this is a lot of work dgaf rn lol
@@ -126,6 +130,23 @@ def scan_music_library(sql_session, music_dir: str):
                 add_new_track_to_db(sql_session, filepath)
 
     sql_session.flush()
+
+def add_new_track_to_db(sql_session, filepath: str):
+    if not os.path.exists(filepath):
+        print(f"File {filepath} does not exist, skipping...")
+        return
+
+    file_track_data = extract_file_metadata(filepath)
+
+    if file_track_data is None:
+        print(f"No metadata found in file {filepath}, skipping...")
+        file_track_data = SoulDB.TrackData(filepath=filepath, comments="WARNING: Error while extracting metadata. This likely means the file is corrupted or empty")
+
+    print(f"Found track with data: {file_track_data}, adding to database...")
+
+    existing_track = SoulDB.get_existing_track(sql_session, file_track_data)
+    if existing_track is None:
+        SoulDB.Tracks.add_track(sql_session, file_track_data)
 
 def update_db_with_spotify_playlist(sql_session, spotify_client, playlist_metadata):
     print(f"Updating database with tracks from playlist {playlist_metadata['name']}...")
@@ -180,67 +201,34 @@ def add_track_data_to_playlist(sql_session, track_data: SoulDB.TrackData, playli
     if existing_assoc is None:
         playlist_row.playlist_tracks.append(playlist_track_assoc)
 
-def pprint(data):
-    print(json.dumps(data, indent=4))
-
-def save_json(data, filename="debug/debug.json"):
-    with open(f"debug/{filename}", "w") as file:
-        json.dump(data, file)
-
-# TODO: look at metadata to see what else we can extract - it's different for each file :( - need to find file with great metadata as example
-def extract_file_metadata(filepath: str) -> SoulDB.TrackData:
-    """
-    Extracts metadata from a file using mutagen
-
-    Args:
-        filepath (str): the path to the file
-
-    Returns:
-        dict: a dictionary of metadata
-    """
-
-    try:
-        file_metadata = mutagen.File(filepath)
-    except Exception as e:
-        print(f"Error reading metadata of file {filepath}: {e}")
-        return None
-
-    if file_metadata:
-        title = file_metadata.get("title", [None])[0]
-        artists = file_metadata.get("artist", [None])[0]
-        album = file_metadata.get("album", [None])[0]
-        release_date = file_metadata.get("date", [None])[0]
-
-        track_data = SoulDB.TrackData(
-            filepath=filepath,
-            title=title,
-            artists=[(artist, None) for artist in artists.split(",")] if artists else [(None, None)],
-            album=album,
-            release_date=release_date,
-        )
-
-        return track_data
-
-def add_new_track_to_db(sql_session, filepath: str):
-    if not os.path.exists(filepath):
-        print(f"File {filepath} does not exist, skipping...")
-        return
-
-    file_track_data = extract_file_metadata(filepath)
-
-    if file_track_data is None:
-        print(f"No metadata found in file {filepath}, skipping...")
-        file_track_data = SoulDB.TrackData(filepath=filepath, comments="WARNING: Error while extracting metadata. This likely means the file is corrupted or empty")
-
-    print(f"Found track with data: {file_track_data}, adding to database...")
-
-    existing_track = SoulDB.get_existing_track(sql_session, file_track_data)
-    if existing_track is None:
-        SoulDB.Tracks.add_track(sql_session, file_track_data)
-
 # ===========================================
 #       interesting and complex queries
 # ===========================================
+
+def execute_all_interesting_queries(sql_session):
+    input("Executing all interesting and complex queries, press enter to begin")
+
+    get_missing_tracks(sql_session)
+    input("Press enter to execute next query")
+    get_tracks_by_artist(sql_session, "Kendrick Lamar")
+    input("Press enter to execute next query")
+    get_tracks_by_album(sql_session, "good kid, m.A.A.d city")
+    input("Press enter to execute next query")
+    get_favorite_artists(sql_session)
+    input("Press enter to execute next query")
+    get_num_unique_tracks(sql_session)
+    input("Press enter to execute next query")
+    get_num_unique_artists(sql_session)
+    input("Press enter to execute next query")
+    get_num_unique_albums(sql_session)
+    input("Press enter to execute next query")
+    get_favorite_tracks(sql_session)
+    input("Press enter to execute next query")
+    get_average_tracks_per_playlist(sql_session)
+    input("Press enter to execute next query")
+    get_playlists_with_above_avg_track_count(sql_session)
+    input("Press enter to execute next query")
+    get_top_3_tracks_per_artist(sql_session)
 
 # Simple filter query
 def get_missing_tracks(sql_session):
@@ -425,30 +413,50 @@ def get_top_3_tracks_per_artist(sql_session):
 
     return rows
 
-def execute_all_interesting_queries(sql_session):
-    input("Executing all interesting and complex queries, press enter to begin")
+# ===========================================
+#             helper functions
+# ===========================================
 
-    get_missing_tracks(sql_session)
-    input("Press enter to execute next query")
-    get_tracks_by_artist(sql_session, "Kendrick Lamar")
-    input("Press enter to execute next query")
-    get_tracks_by_album(sql_session, "good kid, m.A.A.d city")
-    input("Press enter to execute next query")
-    get_favorite_artists(sql_session)
-    input("Press enter to execute next query")
-    get_num_unique_tracks(sql_session)
-    input("Press enter to execute next query")
-    get_num_unique_artists(sql_session)
-    input("Press enter to execute next query")
-    get_num_unique_albums(sql_session)
-    input("Press enter to execute next query")
-    get_favorite_tracks(sql_session)
-    input("Press enter to execute next query")
-    get_average_tracks_per_playlist(sql_session)
-    input("Press enter to execute next query")
-    get_playlists_with_above_avg_track_count(sql_session)
-    input("Press enter to execute next query")
-    get_top_3_tracks_per_artist(sql_session)
+def pprint(data):
+    print(json.dumps(data, indent=4))
+
+def save_json(data, filename="debug/debug.json"):
+    with open(f"debug/{filename}", "w") as file:
+        json.dump(data, file)
+
+# TODO: look at metadata to see what else we can extract - it's different for each file :( - need to find file with great metadata as example
+def extract_file_metadata(filepath: str) -> SoulDB.TrackData:
+    """
+    Extracts metadata from a file using mutagen
+
+    Args:
+        filepath (str): the path to the file
+
+    Returns:
+        dict: a dictionary of metadata
+    """
+
+    try:
+        file_metadata = mutagen.File(filepath)
+    except Exception as e:
+        print(f"Error reading metadata of file {filepath}: {e}")
+        return None
+
+    if file_metadata:
+        title = file_metadata.get("title", [None])[0]
+        artists = file_metadata.get("artist", [None])[0]
+        album = file_metadata.get("album", [None])[0]
+        release_date = file_metadata.get("date", [None])[0]
+
+        track_data = SoulDB.TrackData(
+            filepath=filepath,
+            title=title,
+            artists=[(artist, None) for artist in artists.split(",")] if artists else [(None, None)],
+            album=album,
+            release_date=release_date,
+        )
+
+        return track_data
 
 if __name__ == "__main__":
     main()
