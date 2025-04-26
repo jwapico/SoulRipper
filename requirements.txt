@@ -1,7 +1,4 @@
 python-dotenv
-slskd-api
-yt-dlp
 spotipy
 sqlalchemy
 mutagen
-keyboard
