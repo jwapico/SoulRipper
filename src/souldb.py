@@ -10,18 +10,6 @@ from dataclasses import dataclass
 
 Base = declarative_base()
 
-def add_song_to_playlist(playlist, songId, session):
-    # new_track = playlist(song_id = songId)
-    # session.add(new_track)
-    # session.flush()
-    
-    stmt = sqla.insert(playlist).values(
-                song_id=songId,
-            ).prefix_with("OR IGNORE")  # SQLite only
-
-    session.execute(stmt)
-    session.flush()
-
 @dataclass
 class TrackData:
     """
@@ -209,3 +197,15 @@ def get_existing_track(session, track: TrackData):
         existing_track = session.query(Tracks).filter_by(filepath=track.filepath, date_liked_spotify=track.date_liked_spotify).first()
 
     return existing_track
+
+def add_song_to_playlist(playlist, songId, session):
+    # new_track = playlist(song_id = songId)
+    # session.add(new_track)
+    # session.flush()
+    
+    stmt = sqla.insert(playlist).values(
+                song_id=songId,
+            ).prefix_with("OR IGNORE")  # SQLite only
+
+    session.execute(stmt)
+    session.flush()

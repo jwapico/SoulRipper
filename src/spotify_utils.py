@@ -2,6 +2,7 @@ import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 from dotenv import load_dotenv
 from souldb import TrackData
+import time
 import re
 
 class SpotifyUtils:
@@ -91,12 +92,18 @@ class SpotifyUtils:
         offset = 0
 
         while True:
-            response = self.spotipy_client.current_user_saved_tracks(limit=50, offset=offset)
-            all_tracks.extend(response["items"])
-            offset += 50
+            try:
+                response = self.spotipy_client.current_user_saved_tracks(limit=50, offset=offset)
+                all_tracks.extend(response["items"])
+                offset += 50
 
-            if len(response["items"]) < 50:
-                break
+                if len(response["items"]) < 50:
+                    break
+
+            except Exception as e:
+                print(f"Spotify API error: {e}\nSleeping and retrying...")
+                time.sleep(1)
+                continue
             
         return all_tracks
     
