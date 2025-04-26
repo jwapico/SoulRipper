@@ -157,7 +157,7 @@ def update_db_with_spotify_playlist(sql_session, spotify_client, playlist_metada
     # create and flush the playlist since we need its id for the playlist_tracks association table
     playlist_row = sql_session.query(SoulDB.Playlists).filter_by(spotify_id=playlist_metadata['id']).first()
     if playlist_row is None:
-        playlist_row = SoulDB.Playlists.add_playlist(sql_session, playlist_metadata['id'], playlist_metadata['name'], playlist_metadata['description'], None)
+        playlist_row = SoulDB.Playlists.add_playlist(sql_session, playlist_metadata['id'], playlist_metadata['name'], playlist_metadata['description'])
         sql_session.add(playlist_row)
         sql_session.flush()
 
