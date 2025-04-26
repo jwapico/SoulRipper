@@ -232,7 +232,7 @@ def get_existing_track(session, track: TrackData):
     if track.spotify_id is not None:
         existing_track = session.query(Tracks).filter_by(spotify_id=track.spotify_id).first()
     else:
-        existing_track = session.query(Tracks).filter_by(filepath=track.filepath, date_liked_spotify=track.date_liked_spotify).first()
+        existing_track = session.query(Tracks).filter_by(filepath=track.filepath,title=track.title, album=track.album).first()
 
     return existing_track
 
