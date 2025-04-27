@@ -68,13 +68,17 @@ class SpotifyUtils:
         offset = 0
 
         while True:
-            response = self.spotipy_client.playlist_items(offset=offset, playlist_id=playlist_id)
-            all_tracks.extend(response["items"])
-            offset += 100
+            try:
+                response = self.spotipy_client.playlist_items(offset=offset, playlist_id=playlist_id)
+                all_tracks.extend(response["items"])
+                offset += 100
 
-            if len(response["items"]) < 100:
-                break
-            
+                if len(response["items"]) < 100:
+                    break
+            except Exception as e:
+                print(e)
+                continue
+                
         return all_tracks
 
     def get_playlist_id_from_url(self, playlist_url: str):
