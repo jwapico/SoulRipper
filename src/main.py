@@ -94,13 +94,14 @@ def main():
     scan_music_library(sql_session, OUTPUT_PATH)
     sql_session.commit()
     
+    start_time = time.perf_counter()
     # get all playlists from spotify and add them to the database
     all_playlists_metadata = spotify_client.get_all_playlists()
     for playlist_metadata in all_playlists_metadata:
         update_db_with_spotify_playlist(sql_session, spotify_client, playlist_metadata)
 
     # add the users liked songs to the database
-    start_time = time.perf_counter()
+    
 
     update_db_with_spotify_liked_tracks(spotify_client, sql_session)
     sql_session.flush()
