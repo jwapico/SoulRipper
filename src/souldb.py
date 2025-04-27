@@ -36,8 +36,22 @@ class TrackData:
     explicit: bool = None
     comments: str = None
     
+    # def __hash__(self):
+    #     return hash((self.spotify_id, self.album, self.title, self.filepath))
+
     def __hash__(self):
-        return hash((self.spotify_id, self.album, self.title, self.filepath))
+        if self.spotify_id is not None:
+            return hash(self.spotify_id)
+        else:
+            return hash((self.title, self.album, self.filepath))
+
+    def __eq__(self, other):
+        if not isinstance(other, TrackData):
+            return False
+        if self.spotify_id is not None and other.spotify_id is not None:
+            return self.spotify_id == other.spotify_id
+        else:
+            return (self.title, self.album, self.filepath) == (other.title, other.album, other.filepath)
 
 # table with info about every single track and file in the library
 # TODO: i think the date_liked_spotify field is reduntant since we should have a playlist for every track that was liked on spotify with the date added there

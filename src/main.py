@@ -191,20 +191,30 @@ def update_db_with_spotify_liked_tracks(spotify_client: SpotifyUtils, sql_sessio
     add_track_data_to_playlist(sql_session, relevant_tracks_data, liked_playlist)
 
 def add_track_data_to_playlist(sql_session, track_data_list: list[SoulDB.TrackData], playlist_row: SoulDB.Playlists):
-
-    existing_keys = set(
-        (spotify_id, title, album)
-        for spotify_id, title, album in sql_session.query(
-            SoulDB.Tracks.spotify_id,
-            SoulDB.Tracks.title,
-            SoulDB.Tracks.album
-        ).all()
+    existing_spotify_ids = set(
+        spotify_id for (spotify_id,) in sql_session.query(SoulDB.Tracks.spotify_id).filter(SoulDB.Tracks.spotify_id.isnot(None))
+    )
+    existing_non_spotify_tracks = set(
+        (title, album, filepath) for (title, album, filepath) in sql_session.query(
+            SoulDB.Tracks.title, SoulDB.Tracks.album, SoulDB.Tracks.filepath
+        ).filter(SoulDB.Tracks.spotify_id.is_(None))
     )
 
     new_tracks = set()
+    seen_spotify_ids = set()
+    seen_non_spotify = set()
+
     for track_data in track_data_list:
-        if (track_data.spotify_id, track_data.title, track_data.album) not in existing_keys:
-            new_tracks.add(track_data)
+        if track_data.spotify_id:
+            if track_data.spotify_id in existing_spotify_ids or track_data.spotify_id in seen_spotify_ids:
+                continue
+            seen_spotify_ids.add(track_data.spotify_id)
+        else:
+            key = (track_data.title, track_data.album, track_data.filepath)
+            if key in existing_non_spotify_tracks or key in seen_non_spotify:
+                continue
+            seen_non_spotify.add(key)
+        new_tracks.add(track_data)
             
     SoulDB.Tracks.bulk_add_tracks(sql_session,new_tracks)
     
