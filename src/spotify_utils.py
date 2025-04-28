@@ -68,12 +68,17 @@ class SpotifyUtils:
         offset = 0
 
         while True:
-            response = self.spotipy_client.playlist_items(offset=offset, playlist_id=playlist_id)
-            all_tracks.extend(response["items"])
-            offset += 100
+            try:
+                response = self.spotipy_client.playlist_items(offset=offset, playlist_id=playlist_id)
+                all_tracks.extend(response["items"])
+                offset += 100
 
-            if len(response["items"]) < 100:
-                break
+                if len(response["items"]) < 100:
+                    break
+            except Exception as e:
+                print(f"Spotify error, sleeping and trying again: {e}")
+                time.sleep(5)
+                continue
             
         return all_tracks
 
@@ -118,24 +123,27 @@ class SpotifyUtils:
     def get_data_from_playlist(self, tracks) -> list[TrackData]:
         relevant_data = []
         for track in tracks:
-            spotify_id = track["track"]["id"]
-            title = track["track"]["name"]
-            artists = [(artist["name"], artist["id"]) for artist in track["track"]["artists"]]
-            album = track["track"]["album"]["name"]
-            release_date = track["track"]["album"]["release_date"]
-            track_added_date = track["added_at"]
-            explicit = track["track"]["explicit"]
+            try:
+                spotify_id = track["track"]["id"]
+                title = track["track"]["name"]
+                artists = [(artist["name"], artist["id"]) for artist in track["track"]["artists"]]
+                album = track["track"]["album"]["name"]
+                release_date = track["track"]["album"]["release_date"]
+                track_added_date = track["added_at"]
+                explicit = track["track"]["explicit"]
 
-            track_data = TrackData(
-                spotify_id=spotify_id,
-                title=title,
-                artists=artists,
-                album=album,
-                release_date=release_date,
-                date_liked_spotify=track_added_date,
-                explicit=explicit
-            )
+                track_data = TrackData(
+                    spotify_id=spotify_id,
+                    title=title,
+                    artists=artists,
+                    album=album,
+                    release_date=release_date,
+                    date_liked_spotify=track_added_date,
+                    explicit=explicit
+                )
 
-            relevant_data.append(track_data)
-        
+                relevant_data.append(track_data)
+            except Exception as e:
+                print(f"somthing sus has occured {e}")
+            
         return relevant_data

@@ -49,11 +49,13 @@ def main():
     parser.add_argument("--debug", action="store_true", help="Enable debug statements")
     parser.add_argument("--drop-database", action="store_true", help="Drop the database before running the program")
     parser.add_argument("--add-track", type=str, help="Add a track to the database - provide the filepath")
+    parser.add_argument("--use-ada", action="store_true", help="Connect the cloud ada database")
     args = parser.parse_args()
     DEBUG = args.debug
     DROP_DATABASE = args.drop_database
     OUTPUT_PATH = args.music_dir if args.music_dir else args.pos_music_dir
     NEW_TRACK_FILEPATH = args.add_track
+    USE_ADA = args.use_ada
 
     dotenv.load_dotenv()
 
@@ -61,26 +63,46 @@ def main():
     SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
     SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
     SPOTIFY_REDIRECT_URI = os.getenv("SPOTIFY_REDIRECT_URI")
+    ADA_USERNAME = os.getenv("ada_username")
+    ADA_PASSWORD = os.getenv("ada_pwd")
     spotify_client = SpotifyUtils(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI)
     SPOTIFY_USER_ID, SPOTIFY_USERNAME = spotify_client.get_user_info()
 
-    # create the engine with the local soul.db file - need to change this for final submission
-    # engine = sqla.create_engine("sqlite:///assets/soul.db", echo=DEBUG)
-    engine = sqla.create_engine("sqlite:///assets/soul.db", echo=False)
+    if USE_ADA:
+        mines_database_url = f"postgresql://{ADA_USERNAME}:{ADA_PASSWORD}@ada.mines.edu/csci403"
+        engine = sqla.create_engine(mines_database_url, echo=False)
+        # Set schema for Ada database
+        SoulDB.Base.metadata.schema = 'group38'
+    else:
+        # create the engine with the local soul.db file - need to change this for final submission
+        engine = sqla.create_engine("sqlite:///assets/soul.db", echo=DEBUG)
+
+    # initialize the tables defined in souldb.py and create a session
+    session = sqla.orm.sessionmaker(bind=engine)
+    sql_session: Session = session()
+
+    if USE_ADA:
+        sql_session.execute(sqla.text("SET search_path TO group38"))
 
     # if the flag was provided drop everything in the database
     if DROP_DATABASE:
         if not DEBUG:
             input("Warning: This will drop all tables in the database. Press enter to continue...")
 
-        metadata = sqla.MetaData()
-        metadata.reflect(bind=engine)
-        metadata.drop_all(engine)
+        if USE_ADA:
+            # Drop and recreate schema atomically
+            sql_session.execute(sqla.text("DROP SCHEMA IF EXISTS group38 CASCADE"))
+            sql_session.execute(sqla.text("CREATE SCHEMA group38"))
+            sql_session.commit()  # Commit schema changes first!
+        else:
+            metadata = sqla.MetaData()
+            metadata.reflect(bind=engine)
+            metadata.drop_all(engine)
 
-    # initialize the tables defined in souldb.py and create a session
+    sql_session.commit()
+    # Create tables only AFTER schema changes are committed
     SoulDB.Base.metadata.create_all(engine)
-    session = sqla.orm.sessionmaker(bind=engine)
-    sql_session: Session = session()
+    sql_session.commit()
 
     # add the user to the database if they don't already exist
     matching_user = sql_session.query(SoulDB.UserInfo).filter_by(spotify_id=SPOTIFY_USER_ID).first()
