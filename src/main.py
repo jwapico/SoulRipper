@@ -418,55 +418,29 @@ def get_playlists_with_above_avg_track_count(sql_session):
 # Window function
 def get_top_3_tracks_per_artist(sql_session):
     start_time = time.perf_counter()
-    # stmt = sqla.text("""
-    # SELECT 
-    #     artist_name,
-    #     track_title,
-    #     num_playlists
-    # FROM (
-    #     SELECT
-    #         a.name AS artist_name,
-    #         t.title AS track_title,
-    #         COUNT(pt.playlist_id) AS num_playlists,
-    #         ROW_NUMBER() OVER (
-    #             PARTITION BY a.id
-    #             ORDER BY COUNT(pt.playlist_id) DESC
-    #         ) AS rn
-    #     FROM artists a
-    #     JOIN track_artists ta ON a.id = ta.artist_id
-    #     JOIN tracks t ON ta.track_id = t.id
-    #     LEFT JOIN playlist_tracks pt ON t.id = pt.track_id
-    #     GROUP BY a.id, t.id
-    # ) sub
-    # WHERE rn <= 3
-    # ORDER BY artist_name, num_playlists DESC;
-    # """)
-    
-    stmt = sqla.text('''SELECT 
-        a.name AS artist_name,
-        t.title AS track_title,
-        COUNT(pt.playlist_id) AS num_playlists
-    FROM artists a
-    JOIN track_artists ta ON a.id = ta.artist_id
-    JOIN tracks t ON ta.track_id = t.id
-    LEFT JOIN playlist_tracks pt ON t.id = pt.track_id
-    GROUP BY a.name, t.title, a.id, t.id
-    HAVING (
-        SELECT COUNT(*) 
-        FROM (
-            SELECT t2.id
-            FROM artists a2
-            JOIN track_artists ta2 ON a2.id = ta2.artist_id
-            JOIN tracks t2 ON ta2.track_id = t2.id
-            LEFT JOIN playlist_tracks pt2 ON t2.id = pt2.track_id
-            WHERE a2.id = a.id
-            GROUP BY t2.id
-            ORDER BY COUNT(pt2.playlist_id) DESC
-            LIMIT 3
-        ) AS top_tracks
-        WHERE top_tracks.id = t.id
-    ) > 0
-    ORDER BY artist_name, num_playlists DESC;''')
+    stmt = sqla.text("""
+    SELECT 
+        artist_name,
+        track_title,
+        num_playlists
+    FROM (
+        SELECT
+            a.name AS artist_name,
+            t.title AS track_title,
+            COUNT(pt.playlist_id) AS num_playlists,
+            ROW_NUMBER() OVER (
+                PARTITION BY a.id
+                ORDER BY COUNT(pt.playlist_id) DESC
+            ) AS rn
+        FROM artists a
+        JOIN track_artists ta ON a.id = ta.artist_id
+        JOIN tracks t ON ta.track_id = t.id
+        LEFT JOIN playlist_tracks pt ON t.id = pt.track_id
+        GROUP BY a.id, t.id
+    ) sub
+    WHERE rn <= 3
+    ORDER BY artist_name, num_playlists DESC;
+    """)
     
     rows = sql_session.execute(stmt).fetchall()
 
