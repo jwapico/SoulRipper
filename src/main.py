@@ -104,6 +104,7 @@ def main():
     
 
     update_db_with_spotify_liked_tracks(spotify_client, sql_session)
+
     sql_session.flush()
     sql_session.commit()
     
@@ -169,9 +170,9 @@ def update_db_with_spotify_playlist(sql_session, spotify_client, playlist_metada
         sql_session.flush()
 
     # add each track in the playlist to the database if it doesn't already exist
-    for track_data in relevant_tracks_data:
-        add_track_data_to_playlist(sql_session, track_data, playlist_row)
-        sql_session.flush()
+    # for track_data in relevant_tracks_data:
+    add_track_data_to_playlist(sql_session, relevant_tracks_data, playlist_row)
+    sql_session.flush()
 
 def update_db_with_spotify_liked_tracks(spotify_client: SpotifyUtils, sql_session):
     liked_tracks_data = spotify_client.get_liked_tracks()
@@ -185,28 +186,53 @@ def update_db_with_spotify_liked_tracks(spotify_client: SpotifyUtils, sql_sessio
 
     # add each track in the users liked songs to the database if it doesn't already exist
     # TODO: we can prolly optimize this for fp deliverable
-    for track_data in relevant_tracks_data:
-        add_track_data_to_playlist(sql_session, track_data, liked_playlist)
+    # for track_data in relevant_tracks_data:
+    add_track_data_to_playlist(sql_session, relevant_tracks_data, liked_playlist)
 
-def add_track_data_to_playlist(sql_session, track_data: SoulDB.TrackData, playlist_row: SoulDB.Playlists):
-    # prolly a faster way than doing this
-    existing_track_row = SoulDB.get_existing_track(sql_session, track_data)
-    if existing_track_row:
-        playlist_track_assoc = SoulDB.PlaylistTracks(track_id=existing_track_row.id, playlist_id=playlist_row.id, added_at=track_data.date_liked_spotify)
-    else:
-        print(f"Adding track {track_data.title} to playlist {playlist_row.name}...")
-        # our add_track function is prolly also dookie
-        new_track_row = SoulDB.Tracks.add_track(sql_session, track_data)
-        playlist_track_assoc = SoulDB.PlaylistTracks(track_id=new_track_row.id, playlist_id=playlist_row.id, added_at=track_data.date_liked_spotify)
+def add_track_data_to_playlist(sql_session, track_data_list: list[SoulDB.TrackData], playlist_row: SoulDB.Playlists):
+    existing_spotify_ids = set(
+        spotify_id for (spotify_id,) in sql_session.query(SoulDB.Tracks.spotify_id).filter(SoulDB.Tracks.spotify_id.isnot(None))
+    )
+    existing_non_spotify_tracks = set(
+        (title, album, filepath) for (title, album, filepath) in sql_session.query(
+            SoulDB.Tracks.title, SoulDB.Tracks.album, SoulDB.Tracks.filepath
+        ).filter(SoulDB.Tracks.spotify_id.is_(None))
+    )
 
-    existing_assoc = sql_session.query(SoulDB.PlaylistTracks).filter_by(
-        playlist_id=playlist_row.id,
-        track_id=(new_track_row.id if existing_track_row is None else existing_track_row.id),
-        added_at=track_data.date_liked_spotify
-    ).first()
+    new_tracks = set()
+    seen_spotify_ids = set()
+    seen_non_spotify = set()
 
-    if existing_assoc is None:
-        playlist_row.playlist_tracks.append(playlist_track_assoc)
+    for track_data in track_data_list:
+        if track_data.spotify_id:
+            if track_data.spotify_id in existing_spotify_ids or track_data.spotify_id in seen_spotify_ids:
+                continue
+            seen_spotify_ids.add(track_data.spotify_id)
+        else:
+            key = (track_data.title, track_data.album, track_data.filepath)
+            if key in existing_non_spotify_tracks or key in seen_non_spotify:
+                continue
+            seen_non_spotify.add(key)
+        new_tracks.add(track_data)
+            
+    SoulDB.Tracks.bulk_add_tracks(sql_session,new_tracks)
+    
+    existing_assoc_keys = set(
+        (playlist_id, track_id)
+        for playlist_id, track_id in sql_session.query(
+            SoulDB.PlaylistTracks.playlist_id,
+            SoulDB.PlaylistTracks.track_id
+        ).all()
+    )
+    for track_data in track_data_list:
+        track = SoulDB.get_existing_track(sql_session,track_data)
+        if track:
+            assoc = SoulDB.PlaylistTracks(track_id=track.id, playlist_id=playlist_row.id, added_at=track.date_liked_spotify)
+            if (assoc.playlist_id, assoc.track_id) not in existing_assoc_keys:
+                existing_assoc_keys.add(assoc)
+                playlist_row.playlist_tracks.append(assoc)
+        else:
+            print("Error")
 
 # ===========================================
 #       interesting and complex queries
@@ -390,6 +416,7 @@ def get_playlists_with_above_avg_track_count(sql_session):
 
 # Window function
 def get_top_3_tracks_per_artist(sql_session):
+    start_time = time.perf_counter()
     stmt = sqla.text("""
     SELECT 
         artist_name,
@@ -413,12 +440,18 @@ def get_top_3_tracks_per_artist(sql_session):
     WHERE rn <= 3
     ORDER BY artist_name, num_playlists DESC;
     """)
+    
     rows = sql_session.execute(stmt).fetchall()
 
+# WHERE rn <= 3
     # Print each row as (artist, track, count)
     for artist, track, count in rows:
-        print(f"{artist or '<Unknown Artist>':40} | {track:75} | in {count} playlists")
-
+        if None not in (artist, track, count):
+            print(f"{artist or '<Unknown Artist>':40} | {track:75} | in {count} playlists")
+    end_time = time.perf_counter()
+    execution_time = end_time - start_time
+    print("Seconds: ", execution_time)
+    
     return rows
 
 # ===========================================

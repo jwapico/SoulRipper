@@ -35,6 +35,23 @@ class TrackData:
     date_liked_spotify: str = None
     explicit: bool = None
     comments: str = None
+    
+    # def __hash__(self):
+    #     return hash((self.spotify_id, self.album, self.title, self.filepath))
+
+    def __hash__(self):
+        if self.spotify_id is not None:
+            return hash(self.spotify_id)
+        else:
+            return hash((self.title, self.album, self.filepath))
+
+    def __eq__(self, other):
+        if not isinstance(other, TrackData):
+            return False
+        if self.spotify_id is not None and other.spotify_id is not None:
+            return self.spotify_id == other.spotify_id
+        else:
+            return (self.title, self.album, self.filepath) == (other.title, other.album, other.filepath)
 
 # table with info about every single track and file in the library
 # TODO: i think the date_liked_spotify field is reduntant since we should have a playlist for every track that was liked on spotify with the date added there
@@ -92,6 +109,51 @@ class Tracks(Base):
 
         session.flush()
         return track
+    
+    def bulk_add_tracks(session, track_data_list: set[TrackData]):
+        # Preload existing artists
+        existing_artists = {
+            artist.name: artist
+            for artist in session.query(Artist).all()
+        }
+
+        new_tracks = []
+        new_track_artist_associations = []
+
+        for track_data in track_data_list:
+            # Create new Track object
+            track = Tracks(
+                spotify_id=track_data.spotify_id,
+                filepath=track_data.filepath,
+                title=track_data.title,
+                album=track_data.album,
+                release_date=track_data.release_date,
+                explicit=track_data.explicit,
+                date_liked_spotify=track_data.date_liked_spotify,
+                comments=track_data.comments
+            )
+            new_tracks.append(track)
+
+            # Link artists
+            if track_data.artists:
+                for name, artist_spotify_id in track_data.artists:
+                    artist = existing_artists.get(name)
+                    if artist is None:
+                        artist = Artist(name=name, spotify_id=artist_spotify_id)
+                        session.add(artist)
+                        session.flush()  # Get the new artist.id
+                        existing_artists[name] = artist  # Add to cache
+
+                    assoc = TrackArtist(track=track, artist=artist)
+                    new_track_artist_associations.append(assoc)
+
+        # Now add everything in one shot
+        session.add_all(new_tracks)
+        session.add_all(new_track_artist_associations)
+        session.flush()
+
+        print(f"Inserted {len(new_tracks)} new tracks.")
+
 
 # table with info about every single playlist in the library
 class Playlists(Base):
@@ -153,38 +215,11 @@ class UserInfo(Base):
         session.add(new_user)
         session.flush()
 
-def createPlaylistTables(playlists, playlist_songs, engine, session):
-    # dropAllPlaylists(playlists, engine)
-    playlist_tables = []
-    tables_dict = {}
-    for playlist in playlists:
-        attr_dict = {'__tablename__': playlist, 'song_id': sqla.Column(sqla.String, primary_key=True)}
-        current_playlist = type(playlist, (Base,), attr_dict)
-        playlist_tables.append(current_playlist)
-        tables_dict[playlist] = current_playlist
-        
-    Base.metadata.create_all(bind=engine)
-    for playlist in playlists:
-        for song in playlist_songs[playlist]:
-            add_song_to_playlist(tables_dict[playlist], song, session)
-        
-    return tables_dict
-
-def dropAllPlaylists(playlists, engine):
-    metadata = sqla.MetaData()
-    metadata.reflect(bind=engine)
-    tables_to_drop = []
-    for playlist in playlists:
-        table_to_drop = metadata.tables.get(playlist)
-        if table_to_drop is not None:
-            tables_to_drop.append(table_to_drop)
-    Base.metadata.drop_all(engine, tables_to_drop, checkfirst=True)
-
 def get_existing_track(session, track: TrackData):
     if track.spotify_id is not None:
         existing_track = session.query(Tracks).filter_by(spotify_id=track.spotify_id).first()
     else:
-        existing_track = session.query(Tracks).filter_by(filepath=track.filepath, date_liked_spotify=track.date_liked_spotify).first()
+        existing_track = session.query(Tracks).filter_by(filepath=track.filepath,title=track.title, album=track.album).first()
 
     return existing_track
 
