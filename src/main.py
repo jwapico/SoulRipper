@@ -49,11 +49,13 @@ def main():
     parser.add_argument("--debug", action="store_true", help="Enable debug statements")
     parser.add_argument("--drop-database", action="store_true", help="Drop the database before running the program")
     parser.add_argument("--add-track", type=str, help="Add a track to the database - provide the filepath")
+    parser.add_argument("--use-ada", action="store_true", help="Connect the cloud ada database")
     args = parser.parse_args()
     DEBUG = args.debug
     DROP_DATABASE = args.drop_database
     OUTPUT_PATH = args.music_dir if args.music_dir else args.pos_music_dir
     NEW_TRACK_FILEPATH = args.add_track
+    USE_ADA = args.use_ada
 
     dotenv.load_dotenv()
 
@@ -61,58 +63,218 @@ def main():
     SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
     SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
     SPOTIFY_REDIRECT_URI = os.getenv("SPOTIFY_REDIRECT_URI")
+    ADA_USERNAME = os.getenv("ada_username")
+    ADA_PASSWORD = os.getenv("ada_pwd")
     spotify_client = SpotifyUtils(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI)
     SPOTIFY_USER_ID, SPOTIFY_USERNAME = spotify_client.get_user_info()
 
-    # create the engine with the local soul.db file - need to change this for final submission
-    # engine = sqla.create_engine("sqlite:///assets/soul.db", echo=DEBUG)
-    engine = sqla.create_engine("sqlite:///assets/soul.db", echo=False)
+    if USE_ADA:
+        mines_database_url = f"postgresql://{ADA_USERNAME}:{ADA_PASSWORD}@ada.mines.edu/csci403"
+        engine = sqla.create_engine(mines_database_url, echo=False)
+        # Set schema for Ada database
+        SoulDB.Base.metadata.schema = 'group38'
+    else:
+        # create the engine with the local soul.db file - need to change this for final submission
+        engine = sqla.create_engine("sqlite:///assets/soul.db", echo=DEBUG)
+
+    # initialize the tables defined in souldb.py and create a session
+    session = sqla.orm.sessionmaker(bind=engine)
+    sql_session: Session = session()
+
+    if USE_ADA:
+        sql_session.execute(sqla.text("SET search_path TO group38"))
 
     # if the flag was provided drop everything in the database
     if DROP_DATABASE:
         if not DEBUG:
             input("Warning: This will drop all tables in the database. Press enter to continue...")
 
-        metadata = sqla.MetaData()
-        metadata.reflect(bind=engine)
-        metadata.drop_all(engine)
+        if USE_ADA:
+            # Drop and recreate schema atomically
+            sql_session.execute(sqla.text("DROP SCHEMA IF EXISTS group38 CASCADE"))
+            sql_session.execute(sqla.text("CREATE SCHEMA group38"))
+            sql_session.commit()  # Commit schema changes first!
+        else:
+            metadata = sqla.MetaData()
+            metadata.reflect(bind=engine)
+            metadata.drop_all(engine)
 
-    # initialize the tables defined in souldb.py and create a session
+    sql_session.commit()
+    # Create tables only AFTER schema changes are committed
     SoulDB.Base.metadata.create_all(engine)
-    session = sqla.orm.sessionmaker(bind=engine)
-    sql_session: Session = session()
+    sql_session.commit()
 
     # add the user to the database if they don't already exist
     matching_user = sql_session.query(SoulDB.UserInfo).filter_by(spotify_id=SPOTIFY_USER_ID).first()
     if matching_user is None:
         SoulDB.UserInfo.add_user(sql_session, SPOTIFY_USERNAME, SPOTIFY_USER_ID, SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET)
 
-    if NEW_TRACK_FILEPATH:
-        add_new_track_to_db(sql_session, NEW_TRACK_FILEPATH)
-
-    # populate the database with metadata found from files in the users output directory
     scan_music_library(sql_session, OUTPUT_PATH)
-    sql_session.commit()
-    
-    start_time = time.perf_counter()
-    # get all playlists from spotify and add them to the database
-    all_playlists_metadata = spotify_client.get_all_playlists()
-    for playlist_metadata in all_playlists_metadata:
-        update_db_with_spotify_playlist(sql_session, spotify_client, playlist_metadata)
 
-    # add the users liked songs to the database
+    # this code is trash dw its okay :)
+    prompt = """\n\nWelcome to SoulRipper, please select one of the following options:
+
+    1: Update the database with all of your data from Spotify (playlists and liked songs)
+    2: Update the database with just your playlists from Spotify
+    3: Update the database with your liked songs from Spotify
+    4: Add a new track to the database
+    5: Modify a track in the database
+    6: Remove a track from the database
+    7: Search for a track in the database
+    8: Display some statistics about your library
+    9: Drop the database
+    q: Close the program
+
+Enter your choice here: """
+
+    while True:
+        choice = input(prompt)
+
+        match choice:
+            case "1":
+                sql_session.commit()
+                
+                all_playlists_metadata = spotify_client.get_all_playlists()
+                for playlist_metadata in all_playlists_metadata:
+                    update_db_with_spotify_playlist(sql_session, spotify_client, playlist_metadata)
+                update_db_with_spotify_liked_tracks(spotify_client, sql_session)
+                sql_session.flush()
+                sql_session.commit()
+                continue
+
+            case "2":
+                all_playlists_metadata = spotify_client.get_all_playlists()
+                for playlist_metadata in all_playlists_metadata:
+                    update_db_with_spotify_playlist(sql_session, spotify_client, playlist_metadata)
+                sql_session.flush()
+                sql_session.commit()
+                continue
+
+            case "3":
+                update_db_with_spotify_liked_tracks(spotify_client, sql_session)
+                sql_session.flush()
+                sql_session.commit()
+                continue
+
+            case "4":
+                filepath = input("Please enter the filepath of your new track: ")
+                filepath = filepath.strip().strip("'\"")
+                add_new_track_to_db(sql_session, filepath)
+                continue
+            
+            case "5":
+                try:
+                    track_id = int(input("Enter the ID of the track you'd like to modify: "))
+                    track_row = sql_session.query(SoulDB.Tracks).filter_by(id=track_id).one()
+                    print(f"\nCurrent track data:")
+                    print(f"Title: {track_row.title}")
+                    print(f"Filepath: {track_row.filepath}")
+                    print(f"Album: {track_row.album}")
+                    print(f"Release Date: {track_row.release_date}")
+                    print(f"Explicit: {track_row.explicit}")
+                    print(f"Date Liked: {track_row.date_liked_spotify}")
+                    print(f"Comments: {track_row.comments}\n")
+
+                    modify_field = input("Enter the name of the field you'd like to modify (e.g., 'title', 'filepath', 'album', 'release_date', 'explicit', 'comments'): ").strip()
+                    if not hasattr(track_row, modify_field):
+                        print(f"Field '{modify_field}' does not exist on Tracks.")
+                        continue
+
+                    new_value = input(f"Enter the new value for {modify_field}: ").strip()
+
+                    # Handle booleans properly
+                    if modify_field.lower() == "explicit":
+                        new_value = new_value.lower() in ("true", "yes", "1")
+
+                    setattr(track_row, modify_field, new_value)
+
+                    sql_session.flush()
+                    sql_session.commit()
+                    print(f"Track (ID {track_id}) updated successfully!\n")
+
+                except Exception as e:
+                    print(f"An error occurred: {e}\n")
+
+                continue
+                        
+            case "6":
+                track_id = input("Enter the id of the track you'd like to remove: ")
+                remove_track(sql_session, track_id)
+                continue
+            
+            case "7":
+                title = input("Enter the title of the track you'd like to search for: ")
+                results = search_for_track(sql_session, title)
+
+                if results == []:
+                    print("No matching tracks found...")
+                    continue
+
+                for track in results:
+                    print(f"ID: {track.id}")
+                    print(f"Title: {track.title}")
+                    print(f"Filepath: {track.filepath}")
+                    print(f"Album: {track.album}")
+                    print(f"Release Date: {track.release_date}")
+                    print(f"Explicit: {track.explicit}")
+                    print(f"Date Liked: {track.date_liked_spotify}")
+                    print(f"Comments: {track.comments}")
+                    print("-" * 40)
+
+                continue
+            
+            case "8":
+                execute_all_interesting_queries(sql_session)
+                continue
+            
+            case "9":
+                confirmation = input("Are you sure you want to drop all tables in the database? Type 'yes' to confirm: ")
+                if confirmation == "yes":
+                    sql_session.close()
+                    metadata = sqla.MetaData()
+                    metadata.reflect(bind=engine)
+                    metadata.drop_all(engine)
+                    print("Database dropped successfully. Closing the program.")
+                    return
+                else:
+                    print("Not dropping the database...")
+                continue
+
+            case "q":
+                return
+            
+            case _:
+                print("Invalid input, try again")
+                continue
+
+    # if NEW_TRACK_FILEPATH:
+    #     add_new_track_to_db(sql_session, NEW_TRACK_FILEPATH)
+
+    # # populate the database with metadata found from files in the users output directory
+    # scan_music_library(sql_session, OUTPUT_PATH)
+    # sql_session.commit()
     
+    # start_time = time.perf_counter()
+    # # get all playlists from spotify and add them to the database
+    # all_playlists_metadata = spotify_client.get_all_playlists()
+    # for playlist_metadata in all_playlists_metadata:
+    #     update_db_with_spotify_playlist(sql_session, spotify_client, playlist_metadata)
+
+    # # add the users liked songs to the database
+    
+
 
     update_db_with_spotify_liked_tracks(spotify_client, sql_session)
 
     sql_session.flush()
     sql_session.commit()
+
     
-    end_time = time.perf_counter()
-    execution_time = end_time - start_time
-    print(f"Seconds: {execution_time}")
+    # end_time = time.perf_counter()
+    # execution_time = end_time - start_time
+    # print(f"Seconds: {execution_time}")
     
-    execute_all_interesting_queries(sql_session)
+    # execute_all_interesting_queries(sql_session)
 
 # ===========================================
 #          main database functions
@@ -498,6 +660,44 @@ def extract_file_metadata(filepath: str) -> SoulDB.TrackData:
         )
 
         return track_data
+    
+# ===========================================
+#             user interaction
+# ===========================================
+
+def search_for_track(sql_session, track_title):
+    results = sql_session.query(SoulDB.Tracks).filter(
+        SoulDB.Tracks.title.ilike(f"%{track_title}%")
+    ).all()
+
+    return results
+
+
+def modify_track(sql_session, track_id, new_track_data: SoulDB.TrackData):
+    existing_track = sql_session.query(SoulDB.Tracks).filter_by(id=track_id).one()
+    
+    existing_track.spotify_id = new_track_data.spotify_id if new_track_data.spotify_id is not None else existing_track.spotify_id
+    existing_track.filepath = new_track_data.filepath if new_track_data.filepath is not None else existing_track.filepath
+    existing_track.title = new_track_data.title if new_track_data.title is not None else existing_track.title
+    existing_track.album = new_track_data.album if new_track_data.album is not None else existing_track.album
+    existing_track.release_date = new_track_data.release_date if new_track_data.release_date is not None else existing_track.release_date
+    existing_track.explicit = new_track_data.explicit if new_track_data.explicit is not None else existing_track.explicit
+    existing_track.date_liked_spotify = new_track_data.date_liked_spotify if new_track_data.date_liked_spotify is not None else existing_track.date_liked_spotify
+    existing_track.comments = new_track_data.comments if new_track_data.comments is not None else existing_track.comments
+
+
+def remove_track(sql_session, track_id) -> bool :
+    existing_track = sql_session.query(SoulDB.Tracks).filter_by(id=track_id).one()
+
+    if existing_track:
+        sql_session.delete(existing_track)
+        sql_session.flush()
+        print("Successfully removed the track")
+        return True
+    else:
+        print("Could not find the track you were trying to remove")
+        return False
+
 
 if __name__ == "__main__":
     main()
