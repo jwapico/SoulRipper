@@ -40,8 +40,6 @@ import souldb as SoulDB
 #       - big list here: https://soundcharts.com/blog/music-data-api
 #   - pass through ssh keys in docker so git works
 
-# hello world
-
 def main():
     # collect commandline arguments
     parser = argparse.ArgumentParser(description="")
