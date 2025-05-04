@@ -13,7 +13,8 @@
 				"albert.tabout",
 				"ms-azuretools.vscode-docker",
 				"ClemensPeters.format-json",
-                "qwtel.sqlite-viewer"
+                "qwtel.sqlite-viewer",
+                "eamodio.gitlens"
 			],
 			"settings": {
 				"terminal.integrated.defaultProfile.linux": "bash"

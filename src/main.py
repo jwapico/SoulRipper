@@ -38,6 +38,7 @@ import souldb as SoulDB
 #   - get a songs metadata using an api such as:
 #       - https://www.discogs.com/developers/
 #       - big list here: https://soundcharts.com/blog/music-data-api
+#   - pass through ssh keys in docker so git works
 
 def main():
     # collect commandline arguments
@@ -71,10 +72,6 @@ def main():
     SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
     SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
     SPOTIFY_REDIRECT_URI = os.getenv("SPOTIFY_REDIRECT_URI")
-    # if DEBUG:
-    #     spotify_client = SpotifyUtils(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI,  spotify_scope="user-library-read playlist-modify-public")
-    # else:
-        # spotify_client = SpotifyUtils(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI)
     spotify_client = SpotifyUtils(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI)
     SPOTIFY_USER_ID, SPOTIFY_USERNAME = spotify_client.get_user_info()
 
