@@ -44,7 +44,19 @@
             "args": [
                 "debug/music/",
                 "--update-liked",
-                "--debug"
+                // "--debug"
+            ]
+        },
+        {
+            "name": "main.py with update all playlists",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "/home/soulripper/src/main.py",
+            "console": "integratedTerminal",
+            "args": [
+                "debug/music/",
+                "--update-all-playlists",
+                // "--debug"
             ]
         },
         {
@@ -57,6 +69,18 @@
                 "debug/",
                 "--debug",
                 "--drop-database"
+            ]
+        },
+        {
+            "name": "main.py with search query",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "/home/soulripper/src/main.py",
+            "console": "integratedTerminal",
+            "args": [
+                // "debug/",
+                "--search-query",
+                "parade on cleveland - young thug, drake"
             ]
         },
     ]

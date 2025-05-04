@@ -154,7 +154,7 @@ web:
       ttl: 604800000
     api_keys:
       my_api_key:
-        key: <your_api_key>
+        key: "<your_api_key>"
         role: readwrite # readonly, readwrite, administrator
         cidr: 0.0.0.0/0,::/0
 # retention:
