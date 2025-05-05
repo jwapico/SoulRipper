@@ -67,7 +67,7 @@ class Tracks(Base):
     filepath = sqla.Column(sqla.String, nullable=True)
     title = sqla.Column(sqla.String, nullable=True)
     track_artists = sqla.orm.relationship("TrackArtist", back_populates="track", cascade="all, delete-orphan")
-    artists = sqla.orm.relationship("Artist", secondary="track_artists", viewonly=True)
+    artists = sqla.orm.relationship("Artists", secondary="track_artists", viewonly=True)
     album = sqla.Column(sqla.String, nullable=True)
     release_date = sqla.Column(sqla.String, nullable=True)
     explicit = sqla.Column(sqla.Boolean, nullable=True)
@@ -113,10 +113,10 @@ class Tracks(Base):
         # add artists to the Artist table if they don't already exist, and add them to the TrackArtist association table
         if track_data.artists is not None:
             for name, spotify_id in track_data.artists:
-                existing_artist = session.query(Artist).filter_by(name=name).first()
+                existing_artist = session.query(Artists).filter_by(name=name).first()
 
                 if existing_artist is None:
-                    new_artist = Artist(name=name, spotify_id=spotify_id)
+                    new_artist = Artists(name=name, spotify_id=spotify_id)
                     session.add(new_artist)
                     session.flush()
                     track_artist_assoc = TrackArtist(track_id=track.id, artist_id=new_artist.id)
@@ -133,7 +133,7 @@ class Tracks(Base):
         # Preload existing artists
         existing_artists = {
             artist.name: artist
-            for artist in session.query(Artist).all()
+            for artist in session.query(Artists).all()
         }
 
         new_tracks = []
@@ -158,7 +158,7 @@ class Tracks(Base):
                 for name, artist_spotify_id in track_data.artists:
                     artist = existing_artists.get(name)
                     if artist is None:
-                        artist = Artist(name=name, spotify_id=artist_spotify_id)
+                        artist = Artists(name=name, spotify_id=artist_spotify_id)
                         session.add(artist)
                         # session.flush()  # Get the new artist.id
                         existing_artists[name] = artist  # Add to cache
@@ -219,7 +219,7 @@ class PlaylistTracks(Base):
         )
 
 # table with info about every single artist in the library
-class Artist(Base):
+class Artists(Base):
     __tablename__ = "artists"
     id = sqla.Column(sqla.Integer, primary_key=True)
     spotify_id = sqla.Column(sqla.String, nullable=True, unique=True)
@@ -240,7 +240,7 @@ class TrackArtist(Base):
     track_id = sqla.Column(sqla.Integer, sqla.ForeignKey("tracks.id"), nullable=False)
     artist_id = sqla.Column(sqla.Integer, sqla.ForeignKey("artists.id"), nullable=False)
     track = sqla.orm.relationship("Tracks", back_populates="track_artists")
-    artist = sqla.orm.relationship("Artist", back_populates="track_artists")
+    artist = sqla.orm.relationship("Artists", back_populates="track_artists")
 
     def __repr__(self):
         return (
@@ -273,11 +273,13 @@ class UserInfo(Base):
         session.add(new_user)
         session.flush()
 
-# TODO: We need a better way of checking for existing tracks when spotify id is None
+# TODO: We need a better way of checking for existing tracks when spotify_id and filepath is None
 def get_existing_track(session, track: TrackData):
     if track.spotify_id is not None:
         existing_track = session.query(Tracks).filter_by(spotify_id=track.spotify_id).first()
+    elif track.filepath is not None:
+        existing_track = session.query(Tracks).filter_by(filepath=track.filepath).first()
     else:
-        existing_track = session.query(Tracks).filter_by(filepath=track.filepath,title=track.title, album=track.album).first()
+        existing_track = session.query(Tracks).filter_by(title=track.title, album=track.album).first()
 
     return existing_track

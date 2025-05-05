@@ -36,26 +36,26 @@
             ]
         },
         {
-            "name": "main.py with update liked",
+            "name": "main.py with download liked",
             "type": "debugpy",
             "request": "launch",
             "program": "/home/soulripper/src/main.py",
             "console": "integratedTerminal",
             "args": [
                 "debug/music/",
-                "--update-liked",
+                "--download-liked",
                 // "--debug"
             ]
         },
         {
-            "name": "main.py with update all playlists",
+            "name": "main.py with download all playlists",
             "type": "debugpy",
             "request": "launch",
             "program": "/home/soulripper/src/main.py",
             "console": "integratedTerminal",
             "args": [
                 "debug/music/",
-                "--update-all-playlists",
+                "--download-all-playlists",
                 // "--debug"
             ]
         },

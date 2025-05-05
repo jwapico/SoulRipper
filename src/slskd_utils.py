@@ -49,8 +49,8 @@ class SlskdUtils:
         num_retries = 0
         while not "Completed" in download_state:
             if time_limit and num_retries > time_limit:
-                print(f"download took longer than {time_limit} - skipping - this is only for debugging and we need to look at the downloads status")
-                continue
+                print(f"download took longer than {time_limit % 60} minutes - skipping - this is only for debugging and we need to look at the downloads status")
+                break
 
             download_state = self.client.transfers.get_download(download_user, file_id)["state"]
             print(download_state)
