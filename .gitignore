@@ -185,5 +185,6 @@ assets/slskd.yml
 *.flac
 *.json
 assets/soul.db
-*.DS_Store
 assets/soul.db-journal
+*.DS_Store
+debug/*
