@@ -184,6 +184,7 @@ assets/slskd.yml
 *.webp
 *.flac
 *.json
+*.webm
 assets/soul.db
 assets/soul.db-journal
 *.DS_Store
