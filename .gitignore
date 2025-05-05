@@ -187,5 +187,5 @@ assets/slskd.yml
 *.webm
 assets/soul.db
 assets/soul.db-journal
-*.DS_Store
+.DS_Store
 debug/*
