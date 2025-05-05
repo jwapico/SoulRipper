@@ -1,50 +1,79 @@
-import time
-import slskd_api
+from sqlalchemy.orm import Session
+import sqlalchemy as sqla
+from spotify_utils import SpotifyUtils
 import subprocess
+import time
 import re
 import os
 import json
 import argparse
-import dotenv
-import shutil
-import time
-import sqlalchemy as sqla
-from sqlalchemy.orm import Session
 import mutagen
+import dotenv
+import time
 
-from spotify_utils import SpotifyUtils
 from slskd_utils import SlskdUtils
 import souldb as SoulDB
 
-# TODO's (in order of importance):
+# TODO's (~ roughly in order of importance):
 #   - REFACTOR DOWNLOADING FUNCTIONS (in progress)
 #       - we should populate the database with TrackData from spotify first, then download Null filepath entries after
 #   - REFACTOR DATABASE CODE
-#       - we should only call sql_session.commit() after a meaningful unit of work, rn we call it kinda arbitrary which is bad
-#       - we should also be wrapping ALL database operations in a try-except-finally block, and calling sql_session.rollback() if we catch an exception
-#       - atomicity in the database functions - the classmethods such NOT be calling session.commit()
-#       - this is a big refactor
+#       - only call sql_session.commit() after a meaningful unit of work - atomicity
+#       - we should also be wrapping ALL database operations in a try-except block, and calling sql_session.rollback() if we catch an exception
+#       - we should prolly also remove the UserInfo table and stop storing api keys in the database lol
+#   - better search and selection for soulseek AND yt-dlp given song title and artist
+#   - better USER INTERFACE - gui or otherwise
+#       - some sort of config file for api keys, directory paths, etc
+#       - we should keep a cli but make it better, the long flags are annoying as fuck
+#           - maybe reimplement the infinite prompting thing from the submission
+#       - we should have a way for the user to verify that each downloaded track is correct
+#           - show them the target track (spotify data), and what was actually downloaded, filepath, metadata, etc
+#           - allow them to change metadata fields
+#           - walk them through each downloaded track in their library one by one
+#       - basically just redesign spotify lmao - i want to be able to manipulate playlists and what not
+#           - im pretty sure we have read write permissions for playlists
+#           - better shuffle (can have multiple different options)
+#           - more ways to sort
+#           - more options for columns & data shown in playlist/album view
+#           - tagging system
+#           - theres also a way to stream songs directly from spotify??? 
+#               - https://developer.spotify.com/documentation/web-playback-sdk
+#           - we could go very crazy with this
+#               - could embed/display wikipedia data to make the experience educational ts
+#                   - basically just include the sidebar on wikipedia that displays basic facts about the artist/album
+#                   - https://en.wikipedia.org/api/rest_v1/
+#                   - https://pypi.org/project/Wikipedia-API/ 
+#               - weird idea for playlists: more than one song can follow another
+#                   - basically playlists are trees now :o
+#                   - ui would prolly be nested drop downs
+#       - FLUTTER !!!
+#           - https://docs.flutter.dev/
+#           - https://docs.flutter.dev/get-started/codelab
+#           - we should make sure we have the back end right before we start on the front end
+#   - TODO.md file for project management and big plans
+#       - talk to colton eoghan and other potential users about high level design
+#   - youtube playlist functionality
+#       - https://developers.google.com/youtube/v3/docs/playlists/list
 #   - refactor date_liked_spotify out of the Tracks table, can get this info by looking at the date_added field of the SPOTIFY_LIKED_SONGS playlist
 #       - although maybe we should keep it as a dedicated field if we feel that it is used often enough, running search queries each time could be cumbersome
 #   - restructure this file - there are too many random ahh functions
 #   - pass through ssh keys in docker so git works in vscode
+#   - write an actual README.md
 #   - better syncing with local music directory
 #       - get a songs metadata using an api such as:
 #           - https://www.discogs.com/developers/
 #           - big list here: https://soundcharts.com/blog/music-data-api
-#   - BETTER SEARCH AND SELECTION for soulseek AND yt-dlp given song title and artist
-#   - better user interface - gui or otherwise
-#       - some sort of config file for api keys, directory paths, etc
-#       - make cli better
 #   - error handling in download functions and probably other places
-#   - create a TODO.md file for project management and big plans outside of databases final project (due apr 30 :o)
-#       - talk to colton eoghan and other potential users about high level design
+#       - we can write error logging to the comment field of a track
+#           - we should prollt create a seperate column for this
 #   - parallelize downloads
 #       - threading :D, i think slskd can also parallelize downloads, but it may be better to use threading, idk tho
 #   - the print statements in lower level functions should be changed to logging/debug statements
 #   - better print statements in download and search functions - should track progress (look at slskd data) instead of printing the state on a new line each time lol
 #   - type annotations for ALL functions args and return values
 #   - cleanup comments & add more
+
+#   - this list is getting long as shit lmfao
 
 # TODO: we should clean up main - move some shit into helper functions, also still need to restructure this file </3
 def main():
@@ -60,6 +89,7 @@ def main():
     parser.add_argument("--drop-database", action="store_true", help="Drop the database before running the program")
     parser.add_argument("--max-retries", type=int, default=5, help="The maximum number of retries for downloading a track")
     parser.add_argument("--add-track", type=str, help="Add a track to the database - provide the filepath")
+    parser.add_argument("--yt", action="store_true", help="Download exclusively from Youtube")
     args = parser.parse_args()
     OUTPUT_PATH = os.path.abspath(args.output_path or args.pos_output_path)
     SEARCH_QUERY = args.search_query
@@ -71,6 +101,7 @@ def main():
     # TODO: refactor code to use this value (i think its used in download_track only - will need to be passed down thru other functions tho - need to refactor this file for shared variables)
     MAX_RETRIES = args.max_retries
     NEW_TRACK_FILEPATH = args.add_track
+    YOUTUBE_ONLY = args.yt
 
     dotenv.load_dotenv()
     os.makedirs(OUTPUT_PATH, exist_ok=True)
@@ -116,7 +147,7 @@ def main():
 
     # if a search query is provided, download the track
     if SEARCH_QUERY:
-        output_path = download_from_search_query(slskd_client, SEARCH_QUERY, OUTPUT_PATH)
+        output_path = download_from_search_query(slskd_client, SEARCH_QUERY, OUTPUT_PATH, YOUTUBE_ONLY)
         # TODO: get metadata and insert into database
 
     if DOWNLOAD_ALL_PLAYLISTS:
@@ -127,7 +158,7 @@ def main():
 
     # if the update liked flag is provided, download all liked songs from spotify
     if DOWNLOAD_LIKED:
-        download_liked_songs(slskd_client, spotify_client, sql_session, OUTPUT_PATH)
+        download_liked_songs(slskd_client, spotify_client, sql_session, OUTPUT_PATH, YOUTUBE_ONLY)
     
     # if a playlist url is provided, download the playlist
     if SPOTIFY_PLAYLIST_URL:
@@ -169,7 +200,6 @@ def add_new_track_to_db(sql_session, filepath: str):
         return
 
     file_track_data: SoulDB.TrackData = extract_file_metadata(filepath)
-    print(file_track_data.spotify_id)
 
     if file_track_data is None:
         print(f"No metadata found in file {filepath}, skipping...")
@@ -267,7 +297,7 @@ def add_track_data_to_playlist(sql_session, track_data_list: list[SoulDB.TrackDa
 #             downloading functions
 # ===========================================
 
-def download_liked_songs(slskd_client: SlskdUtils, spotify_client: SpotifyUtils, sql_session: Session, output_path: str):
+def download_liked_songs(slskd_client: SlskdUtils, spotify_client: SpotifyUtils, sql_session: Session, output_path: str, youtube_only: bool):
     # TODO: this function takes a while to run, we should find a way to check if there any changes before calling it
     # add the users liked songs to the database
     liked_playlist = update_db_with_spotify_liked_tracks(spotify_client, sql_session)
@@ -291,19 +321,15 @@ def download_liked_songs(slskd_client: SlskdUtils, spotify_client: SpotifyUtils,
 
                 search_query = f"{track_row.title} - {track_artists}"
 
-                filepath = download_from_search_query(slskd_client, search_query, output_path)
+                filepath = download_from_search_query(slskd_client, search_query, output_path, youtube_only)
                 track_row.filepath = filepath
-                # TODO: is this a questionable time to commit? 
                 sql_session.commit()
 
     except Exception as e:
         sql_session.rollback()
         raise e
     
-# TODO: both of these functions need to be rewritten since we are now downloading by searching the database for null filepaths (W)
-
 # TODO: bruhhhhhhhhhhh the spotify api current_user_saved_tracks() function doesn't return local files FUCK SPOTIFYU there has to be a workaround
-# THIS FUNCTION IS DEPRECATED
 def download_liked_tracks_from_spotify_data(slskd_client: SlskdUtils, spotify_client: SpotifyUtils, sql_session, output_path: str):
     liked_tracks_data = spotify_client.get_liked_tracks()
     relevant_tracks_data: list[SoulDB.TrackData] = spotify_client.get_data_from_playlist(liked_tracks_data)
@@ -322,7 +348,6 @@ def download_liked_tracks_from_spotify_data(slskd_client: SlskdUtils, spotify_cl
     if existing_liked_playlist is None:
         SoulDB.Playlists.add_playlist(sql_session, spotify_id=None, name="SPOTIFY_LIKED_SONGS", description="User liked songs on Spotify - This playlist is generated by SoulRipper", track_rows_and_data=track_rows_and_data)
 
-# THIS FUNCTION IS DEPRECATED
 def download_playlist_from_spotify_url(slskd_client: SlskdUtils, spotify_client: SpotifyUtils, sql_session, playlist_url: str, output_path: str):
     """
     Downloads a playlist from spotify
@@ -414,7 +439,7 @@ def download_track_ytdlp(search_query: str, output_path: str) -> str :
 
     return download_path
 
-def download_from_search_query(slskd_client: SlskdUtils, search_query: str, output_path: str) -> str:
+def download_from_search_query(slskd_client: SlskdUtils, search_query: str, output_path: str, youtube_only: bool) -> str:
     """
     Downloads a track from soulseek or youtube, only downloading from youtube if the query is not found on soulseek
 
@@ -425,6 +450,9 @@ def download_from_search_query(slskd_client: SlskdUtils, search_query: str, outp
     Returns:
         str: the path to the downloaded file
     """
+    if youtube_only:
+        return download_track_ytdlp(search_query, output_path)
+
     download_path = slskd_client.download_track(search_query, output_path, time_limit=5 * 60)
 
     if download_path is None:
