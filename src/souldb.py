@@ -36,6 +36,13 @@ class TrackData:
     explicit: bool = None
     comments: str = None
 
+    def __repr__(self):
+        return (
+            f"TrackData(title='{self.title}', album='{self.album}', "
+            f"artists={[name for name, _ in self.artists] if self.artists else None}, "
+            f"release_date='{self.release_date}', explicit={self.explicit})"
+        )
+
     def __hash__(self):
         if self.spotify_id is not None:
             return hash(self.spotify_id)
@@ -67,6 +74,19 @@ class Tracks(Base):
     date_liked_spotify = sqla.Column(sqla.String, nullable=True)
     comments = sqla.Column(sqla.String, nullable=True)
     playlist_tracks = sqla.orm.relationship("PlaylistTracks", back_populates="track", cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return (
+            f"<Track(id={self.id}, "
+            f"spotify_id='{self.spotify_id}', "
+            f"filepath='{self.filepath}', "
+            f"title='{self.title}', "
+            f"album='{self.album}', "
+            f"release_date='{self.release_date}', "
+            f"explicit={self.explicit}, "
+            f"date_liked_spotify='{self.date_liked_spotify}', "
+            f"comments='{self.comments}')>"
+        )
 
     @classmethod
     def add_track(cls, session, track_data: TrackData):
@@ -163,6 +183,14 @@ class Playlists(Base):
     description = sqla.Column(sqla.String, nullable=True)
     playlist_tracks = sqla.orm.relationship("PlaylistTracks", back_populates="playlist", cascade="all, delete-orphan")
 
+    def __repr__(self):
+        return (
+            f"<Playlist(id={self.id}, "
+            f"spotify_id='{self.spotify_id}', "
+            f"name='{self.name}', "
+            f"description='{self.description}')>"
+        )
+
     @classmethod
     def add_playlist(cls, session, spotify_id, name, description):
         # create the new_playlist table, add it and flush it so we can access the generated id
@@ -182,6 +210,14 @@ class PlaylistTracks(Base):
     playlist = sqla.orm.relationship("Playlists", back_populates="playlist_tracks")
     track = sqla.orm.relationship("Tracks", back_populates="playlist_tracks")
 
+    def __repr__(self):
+        return (
+            f"<PlaylistTrack(id={self.id}, "
+            f"playlist_id={self.playlist_id}, "
+            f"track_id={self.track_id}, "
+            f"added_at='{self.added_at}')>"
+        )
+
 # table with info about every single artist in the library
 class Artist(Base):
     __tablename__ = "artists"
@@ -189,6 +225,13 @@ class Artist(Base):
     spotify_id = sqla.Column(sqla.String, nullable=True, unique=True)
     name = sqla.Column(sqla.String, nullable=True, unique=False)
     track_artists = sqla.orm.relationship("TrackArtist", back_populates="artist", cascade="all, delete-orphan")
+
+    def __repr__(self):
+        return (
+            f"<Artist(id={self.id}, "
+            f"name='{self.name}', "
+            f"spotify_id='{self.spotify_id}')>"
+        )
 
 # association table that creates a simple many-to-many relationship between tracks and artists
 class TrackArtist(Base):
@@ -199,6 +242,13 @@ class TrackArtist(Base):
     track = sqla.orm.relationship("Tracks", back_populates="track_artists")
     artist = sqla.orm.relationship("Artist", back_populates="track_artists")
 
+    def __repr__(self):
+        return (
+            f"<TrackArtist(id={self.id}, "
+            f"track_id={self.track_id}, "
+            f"artist_id={self.artist_id})>"
+        )
+
 # table with info the user
 class UserInfo(Base):
     __tablename__ = "user_info"
@@ -207,6 +257,15 @@ class UserInfo(Base):
     spotify_id = sqla.Column(sqla.String, nullable=False, unique=True)
     spotify_client_id = sqla.Column(sqla.String, nullable=False, unique=True)
     spotify_client_secret = sqla.Column(sqla.String, nullable=False, unique=True)
+
+    def __repr__(self):
+        return (
+            f"<UserInfo(id={self.id}, "
+            f"username='{self.username}', "
+            f"spotify_id='{self.spotify_id}', "
+            f"spotify_client_id='{self.spotify_client_id}', "
+            f"spotify_client_secret='{self.spotify_client_secret}')>"
+        )
 
     @classmethod
     def add_user(cls, session, username, spotify_id, spotify_client_id, spotify_client_secret):
