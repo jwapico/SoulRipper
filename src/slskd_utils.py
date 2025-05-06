@@ -1,5 +1,5 @@
 import slskd_api
-from rich.console import Console, Style
+from rich.console import Console
 from rich.progress import Progress, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn
 import shutil
 import time
@@ -11,43 +11,38 @@ class SlskdUtils:
         self.client = slskd_api.SlskdClient("http://slskd:5030", api_key)
 
     # TODO: the output filename is wrong also ERROR HANDLING
-    def download_track(self, search_query: str, output_path: str, max_retries=5, time_limit=None) -> str:       
+    def download_track(self, search_query: str, output_path: str, max_retries: int = 5, inactive_download_timeout: int = 10) -> str:       
         """
         Attempts to download a track from soulseek
 
         Args:
             search_query (str): the song to download, can be a search query
             output_path (str): the directory to download the song to
+            max_retries (int): the maximum number of times to retry the download from SoulSeek before giving up
+            inactive_download_timeout (int): the number of minutes to wait for a download to complete before giving up
 
         Returns:
-            str|None: the path to the downloaded song or None of the download was unsuccessful
+            str|None: the path to the downloaded song
         """
 
-        # search slskd for the track and filter the results if there are any
+        # search slskd using the passed in query
         search_results = self.search(search_query)
         if search_results is None:
             print("No results found on Soulseek")
             return None
-
-        relevant_results = self.filter_search_results(search_results)
-        if relevant_results is None:
-            print("No relevant results found on Soulseek")
-            return None
         
-        # attempt to download the track from slskd
-        download_result = self.attempt_downloads(relevant_results, max_retries)
-        if download_result is None or all(result is None for result in download_result):
-            print("Unable to download track from Soulseek")
+        # attempt to start the download
+        download_file_id, download_filepath, download_username = self.start_download(search_results, max_retries)
+        if None in (download_file_id, download_filepath, download_username):
+            print(f"None field returned by attempt_downloads, cannot continue: {(download_file_id, download_filepath, download_username)}")
             return None
 
-        download_user, file_data, file_id, download_info = download_result
-        download, download_dir, download_file = self.get_download_from_file_id(file_id)
-        filename = re.split(r'[\\/]', file_data["filename"])[-1]
+        download_filename = re.split(r'[\\/]', download_filepath)[-1]
 
-        # this is style config for the rich progress bar
+        # this is just style config for the rich progress bar
         rich_console = Console()
         rich_progress_bar = Progress(
-            TextColumn(f"[light_steel_blue]Downloading:[/light_steel_blue] [bright_white]{filename}"),
+            TextColumn(f"[light_steel_blue]Downloading:[/light_steel_blue] [bright_white]{download_filename}"),
             BarColumn(
                 bar_width=None,
                 complete_style="green",
@@ -64,24 +59,36 @@ class SlskdUtils:
         # this scope is just for the rich progress bar idk exactly how it works 
         with rich_progress_bar as rich_progress:
             task = rich_progress.add_task("", total=100)
+
+            # continuously check on the download while it is incomplete, update the progress bar, and break if it takes too long or an exception occurs
+            start_time = time.time()
             percent_complete = 0.0
             while percent_complete < 100:
-                slskd_download = self.client.transfers.get_download(download_user, file_id)
+                # update the download, progress bar, and timer
+                slskd_download = self.client.transfers.get_download(download_username, download_file_id)
                 percent_complete = round(slskd_download["percentComplete"], 2)
                 rich_progress.update(task, completed=percent_complete)
-                time.sleep(.1)
+                elapsed_time = time.time() - start_time
 
+                # if the download has taken longer than the timeout time AND the download is still at 0%, give up and break
+                # TODO: we prolly need a better way of doing this, what if the download goes stale at 50%? i think there is way to look at transfer rates
+                if elapsed_time > inactive_download_timeout * 60 and percent_complete == 0.0:
+                    print(f'Download was inactive for {inactive_download_timeout} minutes, skipping')
+                    break
+
+                # if something goes wrong on slskd's end an 'exception' field appears in the download - this is bad so we break if this happens
                 if "exception" in slskd_download.keys():
                     print(f'Exception occured in the download: {slskd_download["exception"]}')
                     break
+
+                time.sleep(.1)
     
         # move the file from where it was downloaded to the specified output path
         if slskd_download["state"] == "Completed, Succeeded":
-            containing_dir_name = os.path.basename(download_dir["directory"].replace("\\", "/"))
-            filename = os.path.basename(download_file["filename"].replace("\\", "/"))
-
-            source_path = os.path.join(f"assets/downloads/{containing_dir_name}/{filename}")
-            dest_path = os.path.join(f"{output_path}/{filename}")
+            # by default slskd places downloads in assets/downloads/<containing folder name of file from user>/<file from user>
+            containing_dir_name = os.path.basename(os.path.dirname(download_filepath.replace("\\", "/")))
+            source_path = os.path.join(f"assets/downloads/{containing_dir_name}/{download_filename}")
+            dest_path = os.path.join(f"{output_path}/{download_filename}")
 
             if not os.path.exists(source_path):
                 print(f"ERROR: slskd download state is 'Completed, Succeeded' but the file was not found: {source_path}")
@@ -91,12 +98,17 @@ class SlskdUtils:
             return dest_path
         else:
             print(f"Download failed: {slskd_download['state']}")
+
+            if slskd_download['state'] == "InProgress":
+                raise Exception("DEBUG: Something sus has occured, download got to 100 but state is still InProgress")
+
             return None
-        
-    def attempt_downloads(self, search_results, max_retries):
+    
+    def start_download(self, search_results, max_retries):
+        # attempt to download the each best search result until we reach max_retries or we run out of search_results
         for attempt_count, (file_data, file_user) in enumerate(search_results):
             if attempt_count > max_retries:
-                print(f"Max retries ({max_retries}) reached for your query")
+                print(f"Max retries ({max_retries}) reached for your query, giving up on SoulSeek...")
                 return (None, None, None)
             
             try:
@@ -105,54 +117,58 @@ class SlskdUtils:
                 print(f"Error during transfer: {e}")
                 continue
 
-            download_info, file_id = self.get_download_from_filename(file_data["filename"])
+            filename = file_data["filename"]
+            file_id = self.search_file_id_from_filename(filename)
+            return (file_id, filename, file_user)
+    
+        return (None, None, None)
 
-            if download_info is None:
-                print(f"Error: could not find download for '{file_data['filename']}' from user '{file_user}'")
-            
-            return (file_user, file_data, file_id, download_info)
-
-    def get_download_from_filename(self, filename):
+    # TODO: better searching - need to extract artist and title from returned search data somehow - maybe from filepath 
+    def search(self, search_query: str) -> list:
         """
-        Gets the download object for a file from slskd
+        Searches for a track on soulseek
 
         Args:
-            slskd_client: the slskd client
-            file_data: slskd file data from the search results
-        
+            search_query (str): the query to search for
+
         Returns:
-            download: the download data for the file
+            list: a list of relevant search results
         """
+        search = self.client.searches.search_text(search_query)
+        search_id = search["id"]
 
-        for download in self.client.transfers.get_all_downloads():
-            for directory in download["directories"]:
-                for file in directory["files"]:
-                    if file["filename"] == filename:
-                        return (download, file["id"])
+        rich_console = Console()
 
-    def get_download_from_file_id(self, file_id):
-        """
-        Gets the download object for a file from slskd
+        with rich_console.status(f"[light_steel_blue]Searching SoulSeek for:[/light_steel_blue] [bright_white]{search_query}[/bright_white]", spinner="earth") as status:
+            while True:
+                search_state = self.client.searches.state(search_id)
+                num_found_files = search_state["fileCount"]
+                is_complete = search_state["isComplete"]
 
-        Args:
-            slskd_client: the slskd client
-            file_id: the id of the file
-        
-        Returns:
-            download: the download data for the file
-        """
+                if is_complete:
+                    break
 
-        for download in self.client.transfers.get_all_downloads():
-            for directory in download["directories"]:
-                for file in directory["files"]:
-                    if file["id"] == file_id:
-                        return (download, directory, file)
+                status.update(f"[light_steel_blue]Searching SoulSeek for:[/light_steel_blue] [bright_white]{search_query}[/bright_white] [light_steel_blue]| Total Files found[/light_steel_blue]: [bright_white]{num_found_files}[/bright_white]")
+                time.sleep(.1)
 
-    @classmethod
-    # TODO: we need to analyze the quality of the results somehow
-    #   - for example, if the new file contains "remix" and the original file does not, we should remove it from the query
+        search_results = self.client.searches.search_responses(search_id)
+
+        # filter for just relevant results - audio files that are downloadable from the user
+        relevant_results = self.filter_search_results(search_results)
+        if relevant_results is None:
+            print("No relevant results found on Soulseek")
+            return None
+
+        rich_console.print(f"[light_steel_blue]Search complete for:[/light_steel_blue] [bright_white]{search_query}[/bright_white] [light_steel_blue]| Relevant Files found[/light_steel_blue]: [bright_white]{len(relevant_results)}[/bright_white]")
+        return relevant_results
+
+    # TODO: we need to analyze the relevance of the results somehow
     #   - we are incorrectly downloading a lot of shit results
-    def filter_search_results(clc, search_results):
+    #       - need relevance metric
+    #   - for example, if the new file contains "remix" and the original file does not, we may want to remove it from the results
+    #   - currently files are sorted in order of size - this is a mid way to do it 
+    #   - we should give more options to the user - file types, size, quality, etc
+    def filter_search_results(self, search_results):
         """
         Filters the search results to only include downloadable mp3 and flac files sorted by size
 
@@ -181,34 +197,26 @@ class SlskdUtils:
                 
         relevant_results.sort(key=lambda candidate : candidate[0]["size"], reverse=True)
 
-        return relevant_results
+        if len(relevant_results) > 0:
+            return relevant_results
+        
+        return None
 
-    # TODO: cleanup printing and better searching - need to extract artist and title from search data
-    def search(self, search_query: str) -> list:
+    def search_file_id_from_filename(self, filename):
         """
-        Searches for a track on soulseek
+        Gets the download object for a file from slskd
 
         Args:
-            search_query (str): the query to search for
-
+            slskd_client: the slskd client
+            file_data: slskd file data from the search results
+        
         Returns:
-            list: a list of search results
+            download: the download data for the file
         """
-        search = self.client.searches.search_text(search_query)
-        search_id = search["id"]
 
-        rich_console = Console()
+        for download in self.client.transfers.get_all_downloads():
+            for directory in download["directories"]:
+                for file in directory["files"]:
+                    if file["filename"] == filename:
+                        return file["id"]
 
-        with rich_console.status(f"[light_steel_blue]Searching slskd for:[/light_steel_blue] [bright_white]{search_query}[/bright_white]", spinner="earth") as status:
-            while True:
-                search_state = self.client.searches.state(search_id)
-                num_found_files = search_state["fileCount"]
-                is_complete = search_state["isComplete"]
-                if is_complete:
-                    break
-                status.update(f"[light_steel_blue]Searching slskd for:[/light_steel_blue] [bright_white]{search_query}[/bright_white] [light_steel_blue]| files found[/light_steel_blue]: [bright_white]{num_found_files}[/bright_white]")
-                time.sleep(.1)
-
-        search_results = self.client.searches.search_responses(search_id)
-        rich_console.print(f"[light_steel_blue]Search complete for:[/light_steel_blue] [bright_white]{search_query}[/bright_white] [light_steel_blue]| files found[/light_steel_blue]: [bright_white]{len(search_results)}[/bright_white]")
-        return search_results

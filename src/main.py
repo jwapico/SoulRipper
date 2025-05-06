@@ -74,6 +74,7 @@ import souldb as SoulDB
 #   - parallelize downloads
 #       - threading :D, i think slskd can also parallelize downloads, but it may be better to use threading, idk tho
 #   - the print statements in lower level functions should be changed to logging/debug statements
+#       - anytime a bare print statement & return None combo appears we should be writing whatever relevant data to a log file
 #   - better print statements in download and search functions - should track progress (look at slskd data) instead of printing the state on a new line each time lol
 #   - type annotations for ALL functions args and return values
 #   - cleanup comments & add more
@@ -452,7 +453,7 @@ def download_from_search_query(slskd_client: SlskdUtils, search_query: str, outp
     if youtube_only:
         return download_track_ytdlp(search_query, output_path)
 
-    download_path = slskd_client.download_track(search_query, output_path, time_limit=5 * 60)
+    download_path = slskd_client.download_track(search_query, output_path)
 
     if download_path is None:
         download_path = download_track_ytdlp(search_query, output_path)

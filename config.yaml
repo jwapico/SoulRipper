@@ -4,12 +4,13 @@ spotify_scope: "user-library-read user-read-private playlist-read-collaborative 
 output_path: ~
 
 download_behavior:
-  max_retries: 5                   # unimplemented
   youtube_only: False
-  soulseek_only: False             # unimplemented
+  soulseek_only: False                                      # unimplemented
+  max_retries: 5                                            # unimplemented
+  inactive_download_timeout: 10                             # unimplemented
 
 debug:
-  log: False                       # unimplemented
-  log_filepath: debug/log.txt      # unimplemented
+  log: False                                                # unimplemented
+  log_filepath: debug/log.txt                               # unimplemented
 
 # TODO: all soulseek stuff too - also should write in api keys from .env file
