@@ -232,7 +232,7 @@ def update_db_with_spotify_playlist(sql_session, spotify_client, playlist_metada
 # TODO: this function takes a while to run, we should find a way to check if there any changes before calling it
 def update_db_with_spotify_liked_tracks(spotify_client: SpotifyClient, sql_session):
     liked_tracks_data = spotify_client.get_liked_tracks()
-    relevant_tracks_data: list[SoulDB.TrackData] = spotify_client.get_data_from_playlist(liked_tracks_data)
+    relevant_tracks_data: list[SoulDB.TrackData] = spotify_client.get_track_data_from_playlist(liked_tracks_data)
 
     liked_playlist = sql_session.query(SoulDB.Playlists).filter_by(name="SPOTIFY_LIKED_SONGS").first()
     if liked_playlist is None:
@@ -331,7 +331,7 @@ def download_liked_songs(slskd_client: SlskdUtils, spotify_client: SpotifyClient
 # TODO: bruhhhhhhhhhhh the spotify api current_user_saved_tracks() function doesn't return local files FUCK SPOTIFYU there has to be a workaround
 def download_liked_tracks_from_spotify_data(slskd_client: SlskdUtils, spotify_client: SpotifyClient, sql_session, output_path: str):
     liked_tracks_data = spotify_client.get_liked_tracks()
-    relevant_tracks_data: list[SoulDB.TrackData] = spotify_client.get_data_from_playlist(liked_tracks_data)
+    relevant_tracks_data: list[SoulDB.TrackData] = spotify_client.get_track_data_from_playlist(liked_tracks_data)
 
     track_rows_and_data = []
     for track in relevant_tracks_data:
@@ -363,7 +363,7 @@ def download_playlist_from_spotify_url(slskd_client: SlskdUtils, spotify_client:
     output_path = os.path.join(output_path, playlist_info["name"])
     os.makedirs(output_path, exist_ok=True)
 
-    relevant_tracks_data: list[SoulDB.TrackData] = spotify_client.get_data_from_playlist(playlist_tracks)
+    relevant_tracks_data: list[SoulDB.TrackData] = spotify_client.get_track_data_from_playlist(playlist_tracks)
 
     track_rows_and_data = []
     for track_data in relevant_tracks_data:

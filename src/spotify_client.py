@@ -14,40 +14,44 @@ class SpotifyUserData:
     CLIENT_ID: str
     CLIENT_SECRET: str
     REDIRECT_URI: str
-    SPOTIFY_SCOPE: str
+    SCOPE: str
 
 class SpotifyClient():
+    # whenever a new SpotifyClient gets instantiated, we use the users API config to initialize self.spotipy_client, and set self.USER_ID as instance variables
     def __init__(self, user_data: SpotifyUserData = None, config_filepath: str = None):
         if config_filepath is None and user_data is None:
             raise Exception("You need to provide either a config.yaml filepath or a SpotifyUserData instance when initializing the SpotifyClient")
 
-        if user_data:
-            self.spotipy_client = spotipy.Spotify(
-                auth_manager=SpotifyOAuth(
-                    scope=user_data.SPOTIFY_SCOPE,
-                    client_id=user_data.CLIENT_ID,
-                    client_secret=user_data.CLIENT_SECRET,
-                    redirect_uri=user_data.REDIRECT_URI,
-                    open_browser=False
-                )
-            )
-        else:
+        # if SpotifyUserData was not passed in manually, we extract from the .env and config.yaml files
+        if user_data is None:
+            # the spotify scope is found in the yaml file
             with open(config_filepath, "r") as file:
                 config = yaml.safe_load(file)
 
-            if config is None:
-                raise Exception("Error reading the config file: config is None")
+                if config is None:
+                    raise Exception("Error reading the config file: config is None")
 
+            # API configuration is found the .env file
             load_dotenv()
-            self.spotipy_client = spotipy.Spotify(
-                auth_manager=SpotifyOAuth(
-                    scope=config["spotify_scope"],
-                    client_id=os.getenv("SPOTIFY_CLIENT_ID"),
-                    client_secret=os.getenv("SPOTIFY_CLIENT_SECRET"),
-                    redirect_uri=os.getenv("SPOTIFY_REDIRECT_URI"),
-                    open_browser=False
-                )
+            CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
+            CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
+            REDIRECT_URI = os.getenv("SPOTIFY_REDIRECT_URI")
+            SPOTIFY_SCOPE = config["spotify_scope"]
+
+            if None in (CLIENT_ID, CLIENT_SECRET, REDIRECT_URI, SPOTIFY_SCOPE):
+                raise Exception(f"One or more of the fields needed for SpotifyUserData is None, make sure you have your .env and config.yaml files configured correctly.\nExtracted SpotifyUserData: {user_data}")
+
+            user_data = SpotifyUserData(CLIENT_ID, CLIENT_SECRET, REDIRECT_URI, SPOTIFY_SCOPE)
+
+        self.spotipy_client = spotipy.Spotify(
+            auth_manager=SpotifyOAuth(
+                scope=user_data.SCOPE,
+                client_id=user_data.CLIENT_ID,
+                client_secret=user_data.CLIENT_SECRET,
+                redirect_uri=user_data.REDIRECT_URI,
+                open_browser=False
             )
+        )
 
         self.USER_ID = self.spotipy_client.current_user()["id"]
 
@@ -139,7 +143,7 @@ class SpotifyClient():
 
         return (profile["id"], profile["display_name"])
     
-    def get_data_from_playlist(self, tracks) -> list[TrackData]:
+    def get_track_data_from_playlist(self, tracks) -> list[TrackData]:
         relevant_data = []
         for track in tracks:
             spotify_id = track["track"]["id"]
