@@ -36,7 +36,7 @@ class SlskdUtils:
         
         # attempt to download the track from slskd
         download_result = self.attempt_downloads(relevant_results, max_retries)
-        if download_result is None:
+        if download_result is None or all(result is None for result in download_result):
             print("Unable to download track from Soulseek")
             return None
 

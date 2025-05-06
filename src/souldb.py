@@ -249,30 +249,6 @@ class TrackArtist(Base):
             f"artist_id={self.artist_id})>"
         )
 
-# table with info the user
-class UserInfo(Base):
-    __tablename__ = "user_info"
-    id = sqla.Column(sqla.Integer, primary_key=True)
-    username = sqla.Column(sqla.String, nullable=False, unique=True)
-    spotify_id = sqla.Column(sqla.String, nullable=False, unique=True)
-    spotify_client_id = sqla.Column(sqla.String, nullable=False, unique=True)
-    spotify_client_secret = sqla.Column(sqla.String, nullable=False, unique=True)
-
-    def __repr__(self):
-        return (
-            f"<UserInfo(id={self.id}, "
-            f"username='{self.username}', "
-            f"spotify_id='{self.spotify_id}', "
-            f"spotify_client_id='{self.spotify_client_id}', "
-            f"spotify_client_secret='{self.spotify_client_secret}')>"
-        )
-
-    @classmethod
-    def add_user(cls, session, username, spotify_id, spotify_client_id, spotify_client_secret):
-        new_user = cls(username=username, spotify_id=spotify_id, spotify_client_id=spotify_client_id, spotify_client_secret=spotify_client_secret)
-        session.add(new_user)
-        session.flush()
-
 # TODO: We need a better way of checking for existing tracks when spotify_id and filepath is None
 def get_existing_track(session, track: TrackData):
     if track.spotify_id is not None:

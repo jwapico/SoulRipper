@@ -14,7 +14,8 @@
 				"ms-azuretools.vscode-docker",
 				"ClemensPeters.format-json",
                 "qwtel.sqlite-viewer",
-                "eamodio.gitlens"
+                "eamodio.gitlens",
+                "aaron-bond.better-comments"
 			],
 			"settings": {
 				"terminal.integrated.defaultProfile.linux": "bash"

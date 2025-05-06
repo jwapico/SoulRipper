@@ -1,0 +1,15 @@
+# TODO: implement all of the unimplemented fields 
+
+spotify_scope: "user-library-read user-read-private playlist-read-collaborative playlist-read-private"
+output_path: ~
+
+download_behavior:
+  max_retries: 5                   # unimplemented
+  youtube_only: False
+  soulseek_only: False             # unimplemented
+
+debug:
+  log: False                       # unimplemented
+  log_filepath: debug/log.txt      # unimplemented
+
+# TODO: all soulseek stuff too - also should write in api keys from .env file

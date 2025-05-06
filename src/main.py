@@ -1,11 +1,13 @@
 from sqlalchemy.orm import Session
 import sqlalchemy as sqla
-from spotify_utils import SpotifyUtils
+from spotify_client import SpotifyClient
+from typing import Tuple
 import subprocess
 import time
 import re
 import os
 import json
+import yaml
 import argparse
 import mutagen
 import dotenv
@@ -22,7 +24,7 @@ import souldb as SoulDB
 #       - we should also be wrapping ALL database operations in a try-except block, and calling sql_session.rollback() if we catch an exception
 #       - we should prolly also remove the UserInfo table and stop storing api keys in the database lol
 #   - better search and selection for soulseek AND yt-dlp given song title and artist
-#   - better USER INTERFACE - gui or otherwise
+#   - better USER INTERFACE - GUI 
 #       - some sort of config file for api keys, directory paths, etc
 #       - we should keep a cli but make it better, the long flags are annoying as fuck
 #           - maybe reimplement the infinite prompting thing from the submission
@@ -38,6 +40,7 @@ import souldb as SoulDB
 #           - tagging system
 #           - theres also a way to stream songs directly from spotify??? 
 #               - https://developer.spotify.com/documentation/web-playback-sdk
+#           - if we are including a player (we should) we could record statistics (better than spotify)
 #           - we could go very crazy with this
 #               - could embed/display wikipedia data to make the experience educational ts
 #                   - basically just include the sidebar on wikipedia that displays basic facts about the artist/album
@@ -49,6 +52,7 @@ import souldb as SoulDB
 #       - FLUTTER !!!
 #           - https://docs.flutter.dev/
 #           - https://docs.flutter.dev/get-started/codelab
+#           - https://docs.flutter.dev/get-started/install/linux/web
 #           - we should make sure we have the back end right before we start on the front end
 #   - TODO.md file for project management and big plans
 #       - talk to colton eoghan and other potential users about high level design
@@ -66,6 +70,7 @@ import souldb as SoulDB
 #   - error handling in download functions and probably other places
 #       - we can write error logging to the comment field of a track
 #           - we should prollt create a seperate column for this
+#   - virtualdj xml playlist integration (i already have code for this from a previous project i tihnk)
 #   - parallelize downloads
 #       - threading :D, i think slskd can also parallelize downloads, but it may be better to use threading, idk tho
 #   - the print statements in lower level functions should be changed to logging/debug statements
@@ -103,23 +108,22 @@ def main():
     NEW_TRACK_FILEPATH = args.add_track
     YOUTUBE_ONLY = args.yt
 
+    CONFIG_FILEPATH = "/home/soulripper/config.yaml"
+    load_config_file(CONFIG_FILEPATH)
+
     dotenv.load_dotenv()
     os.makedirs(OUTPUT_PATH, exist_ok=True)
+
+    # connect to spotify API
+    spotify_client = SpotifyClient(config_filepath=CONFIG_FILEPATH)
 
     # we communicate with slskd through port 5030, you can visit localhost:5030 to see the web front end. its at slskd:5030 in the docker container though
     SLSKD_API_KEY = os.getenv("SLSKD_API_KEY")
     slskd_client = SlskdUtils(SLSKD_API_KEY)
 
-    # connect to spotify API
-    SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
-    SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
-    SPOTIFY_REDIRECT_URI = os.getenv("SPOTIFY_REDIRECT_URI")
-    spotify_client = SpotifyUtils(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REDIRECT_URI)
-    SPOTIFY_USER_ID, SPOTIFY_USERNAME = spotify_client.get_user_info()
-
     # create the engine with the local soul.db file and create a session
-    engine = sqla.create_engine("sqlite:///assets/soul.db", echo=DEBUG)
-    sessionmaker = sqla.orm.sessionmaker(bind=engine)
+    db_engine = sqla.create_engine("sqlite:///assets/soul.db", echo=DEBUG)
+    sessionmaker = sqla.orm.sessionmaker(bind=db_engine)
     sql_session: Session = sessionmaker()
 
     # if the flag was provided drop everything in the database
@@ -128,16 +132,11 @@ def main():
             input("Warning: This will drop all tables in the database. Press enter to continue...")
 
         metadata = sqla.MetaData()
-        metadata.reflect(bind=engine)
-        metadata.drop_all(engine)
+        metadata.reflect(bind=db_engine)
+        metadata.drop_all(db_engine)
 
     # initialize the tables defined in souldb.py
-    SoulDB.Base.metadata.create_all(engine)
-
-    # add the user to the database if they don't already exist
-    matching_user = sql_session.query(SoulDB.UserInfo).filter_by(spotify_id=SPOTIFY_USER_ID).first()
-    if matching_user is None:
-        SoulDB.UserInfo.add_user(sql_session, SPOTIFY_USERNAME, SPOTIFY_USER_ID, SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET)
+    SoulDB.Base.metadata.create_all(db_engine)
 
     # populate the database with metadata found from files in the users output directory
     scan_music_library(sql_session, OUTPUT_PATH)
@@ -150,8 +149,8 @@ def main():
         output_path = download_from_search_query(slskd_client, SEARCH_QUERY, OUTPUT_PATH, YOUTUBE_ONLY)
         # TODO: get metadata and insert into database
 
+    # get all playlists from spotify and add them to the database
     if DOWNLOAD_ALL_PLAYLISTS:
-        # get all playlists from spotify and add them to the database
         all_playlists_metadata = spotify_client.get_all_playlists()
         for playlist_metadata in all_playlists_metadata:
             update_db_with_spotify_playlist(sql_session, spotify_client, playlist_metadata)
@@ -231,7 +230,7 @@ def update_db_with_spotify_playlist(sql_session, spotify_client, playlist_metada
     sql_session.commit()
 
 # TODO: this function takes a while to run, we should find a way to check if there any changes before calling it
-def update_db_with_spotify_liked_tracks(spotify_client: SpotifyUtils, sql_session):
+def update_db_with_spotify_liked_tracks(spotify_client: SpotifyClient, sql_session):
     liked_tracks_data = spotify_client.get_liked_tracks()
     relevant_tracks_data: list[SoulDB.TrackData] = spotify_client.get_data_from_playlist(liked_tracks_data)
 
@@ -297,7 +296,7 @@ def add_track_data_to_playlist(sql_session, track_data_list: list[SoulDB.TrackDa
 #             downloading functions
 # ===========================================
 
-def download_liked_songs(slskd_client: SlskdUtils, spotify_client: SpotifyUtils, sql_session: Session, output_path: str, youtube_only: bool):
+def download_liked_songs(slskd_client: SlskdUtils, spotify_client: SpotifyClient, sql_session: Session, output_path: str, youtube_only: bool):
     # TODO: this function takes a while to run, we should find a way to check if there any changes before calling it
     # add the users liked songs to the database
     liked_playlist = update_db_with_spotify_liked_tracks(spotify_client, sql_session)
@@ -330,7 +329,7 @@ def download_liked_songs(slskd_client: SlskdUtils, spotify_client: SpotifyUtils,
         raise e
     
 # TODO: bruhhhhhhhhhhh the spotify api current_user_saved_tracks() function doesn't return local files FUCK SPOTIFYU there has to be a workaround
-def download_liked_tracks_from_spotify_data(slskd_client: SlskdUtils, spotify_client: SpotifyUtils, sql_session, output_path: str):
+def download_liked_tracks_from_spotify_data(slskd_client: SlskdUtils, spotify_client: SpotifyClient, sql_session, output_path: str):
     liked_tracks_data = spotify_client.get_liked_tracks()
     relevant_tracks_data: list[SoulDB.TrackData] = spotify_client.get_data_from_playlist(liked_tracks_data)
 
@@ -348,7 +347,7 @@ def download_liked_tracks_from_spotify_data(slskd_client: SlskdUtils, spotify_cl
     if existing_liked_playlist is None:
         SoulDB.Playlists.add_playlist(sql_session, spotify_id=None, name="SPOTIFY_LIKED_SONGS", description="User liked songs on Spotify - This playlist is generated by SoulRipper", track_rows_and_data=track_rows_and_data)
 
-def download_playlist_from_spotify_url(slskd_client: SlskdUtils, spotify_client: SpotifyUtils, sql_session, playlist_url: str, output_path: str):
+def download_playlist_from_spotify_url(slskd_client: SlskdUtils, spotify_client: SpotifyClient, sql_session, playlist_url: str, output_path: str):
     """
     Downloads a playlist from spotify
 
@@ -470,6 +469,27 @@ def pprint(data):
 def save_json(data, filename="debug/debug.json"):
     with open(f"debug/{filename}", "w") as file:
         json.dump(data, file)
+
+def load_config_file(config_filepath: str) -> Tuple[str, int, bool, bool, str]:
+    with open(config_filepath, "r") as file:
+        config = yaml.safe_load(file)
+
+    if config is None:
+        raise Exception("Error reading the config file: config is None")
+
+    OUTPUT_PATH = config["output_path"]
+    MAX_RETRIES = config["download_behavior"]["max_retries"]
+    YOUTUBE_ONLY = config["download_behavior"]["youtube_only"]
+    LOG_ENABLED = config["debug"]["log"]
+    LOG_FILEPATH = config["debug"]["log_filepath"]
+
+    return (
+        OUTPUT_PATH, 
+        MAX_RETRIES, 
+        YOUTUBE_ONLY, 
+        LOG_ENABLED,
+        LOG_FILEPATH
+    )
 
 # TODO: look at metadata to see what else we can extract - it's different for each file :( - need to find file with great metadata as example
 def extract_file_metadata(filepath: str) -> SoulDB.TrackData:
@@ -734,7 +754,7 @@ def get_top_3_tracks_per_artist(sql_session):
 
 # TODO: we need to figure out how user interaction will look lol
 
-def execute_user_interaction(sql_session, engine, spotify_client):
+def execute_user_interaction(sql_session, db_engine, spotify_client):
         # this code is trash dw its okay :)
     prompt = """\n\nWelcome to SoulRipper, please select one of the following options:
 
@@ -856,8 +876,8 @@ Enter your choice here: """
                 if confirmation == "yes":
                     sql_session.close()
                     metadata = sqla.MetaData()
-                    metadata.reflect(bind=engine)
-                    metadata.drop_all(engine)
+                    metadata.reflect(bind=db_engine)
+                    metadata.drop_all(db_engine)
                     print("Database dropped successfully. Closing the program.")
                     return
                 else:

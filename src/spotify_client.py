@@ -2,33 +2,52 @@ import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 from dotenv import load_dotenv
 from souldb import TrackData
+from dataclasses import dataclass
+import yaml
 import time
 import re
+import os
 
-class SpotifyUtils:
+# immutable dataclass containg the users spotify config information
+@dataclass(frozen=True)
+class SpotifyUserData:
     CLIENT_ID: str
     CLIENT_SECRET: str
     REDIRECT_URI: str
     SPOTIFY_SCOPE: str
-    USER_ID: None
-    spotipy_client: spotipy.Spotify
 
-    def __init__(self, client_id, client_secret, redirect_uri, spotify_scope="user-library-read user-read-private playlist-read-collaborative playlist-read-private"):
-        self.CLIENT_ID = client_id
-        self.CLIENT_SECRET = client_secret
-        self.REDIRECT_URI = redirect_uri
-        self.SPOTIFY_SCOPE = spotify_scope
+class SpotifyClient():
+    def __init__(self, user_data: SpotifyUserData = None, config_filepath: str = None):
+        if config_filepath is None and user_data is None:
+            raise Exception("You need to provide either a config.yaml filepath or a SpotifyUserData instance when initializing the SpotifyClient")
 
-        load_dotenv()
-        self.spotipy_client = spotipy.Spotify(
-            auth_manager=SpotifyOAuth(
-                scope=self.SPOTIFY_SCOPE,
-                client_id=self.CLIENT_ID,
-                client_secret=self.CLIENT_SECRET,
-                redirect_uri=self.REDIRECT_URI,
-                open_browser=False
+        if user_data:
+            self.spotipy_client = spotipy.Spotify(
+                auth_manager=SpotifyOAuth(
+                    scope=user_data.SPOTIFY_SCOPE,
+                    client_id=user_data.CLIENT_ID,
+                    client_secret=user_data.CLIENT_SECRET,
+                    redirect_uri=user_data.REDIRECT_URI,
+                    open_browser=False
+                )
             )
-        )
+        else:
+            with open(config_filepath, "r") as file:
+                config = yaml.safe_load(file)
+
+            if config is None:
+                raise Exception("Error reading the config file: config is None")
+
+            load_dotenv()
+            self.spotipy_client = spotipy.Spotify(
+                auth_manager=SpotifyOAuth(
+                    scope=config["spotify_scope"],
+                    client_id=os.getenv("SPOTIFY_CLIENT_ID"),
+                    client_secret=os.getenv("SPOTIFY_CLIENT_SECRET"),
+                    redirect_uri=os.getenv("SPOTIFY_REDIRECT_URI"),
+                    open_browser=False
+                )
+            )
 
         self.USER_ID = self.spotipy_client.current_user()["id"]
 
