@@ -6,3 +6,4 @@ sqlalchemy
 mutagen
 keyboard
 pyyaml
+rich

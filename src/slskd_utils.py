@@ -1,12 +1,12 @@
 import slskd_api
+from rich.console import Console, Style
+from rich.progress import Progress, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn
 import shutil
 import time
 import os
 import re
 
 class SlskdUtils:
-    client: slskd_api.SlskdClient
-
     def __init__(self, api_key: str):
         self.client = slskd_api.SlskdClient("http://slskd:5030", api_key)
 
@@ -42,23 +42,41 @@ class SlskdUtils:
 
         download_user, file_data, file_id, download_info = download_result
         download, download_dir, download_file = self.get_download_from_file_id(file_id)
+        filename = re.split(r'[\\/]', file_data["filename"])[-1]
 
-        # wait for the download to be completed
-        # TODO: refactor this whole block of code to analyze the download object and get the state from there
-        download_state = self.client.transfers.get_download(download_user, file_id)["state"]
-        num_retries = 0
-        while not "Completed" in download_state:
-            if time_limit and num_retries > time_limit:
-                print(f"download took longer than {time_limit % 60} minutes - skipping - this is only for debugging and we need to look at the downloads status")
-                break
+        # this is style config for the rich progress bar
+        rich_console = Console()
+        rich_progress_bar = Progress(
+            TextColumn(f"[light_steel_blue]Downloading:[/light_steel_blue] [bright_white]{filename}"),
+            BarColumn(
+                bar_width=None,
+                complete_style="green",
+                finished_style="green",
+                pulse_style="deep_pink4",
+                style="deep_pink4"
+            ),
+            TaskProgressColumn(style="green"),
+            TimeRemainingColumn(),
+            expand=True,
+            console=rich_console
+        )     
 
-            download_state = self.client.transfers.get_download(download_user, file_id)["state"]
-            print(download_state)
-            time.sleep(1)
-            num_retries += 1
+        # this scope is just for the rich progress bar idk exactly how it works 
+        with rich_progress_bar as rich_progress:
+            task = rich_progress.add_task("", total=100)
+            percent_complete = 0.0
+            while percent_complete < 100:
+                slskd_download = self.client.transfers.get_download(download_user, file_id)
+                percent_complete = round(slskd_download["percentComplete"], 2)
+                rich_progress.update(task, completed=percent_complete)
+                time.sleep(.1)
 
-        # this moves the file from where it was downloaded to the specified output path
-        if download_state == "Completed, Succeeded":
+                if "exception" in slskd_download.keys():
+                    print(f'Exception occured in the download: {slskd_download["exception"]}')
+                    break
+    
+        # move the file from where it was downloaded to the specified output path
+        if slskd_download["state"] == "Completed, Succeeded":
             containing_dir_name = os.path.basename(download_dir["directory"].replace("\\", "/"))
             filename = os.path.basename(download_file["filename"].replace("\\", "/"))
 
@@ -72,7 +90,7 @@ class SlskdUtils:
             shutil.move(source_path, dest_path)
             return dest_path
         else:
-            print(f"Download failed: {download_state}")
+            print(f"Download failed: {slskd_download['state']}")
             return None
         
     def attempt_downloads(self, search_results, max_retries):
@@ -82,7 +100,6 @@ class SlskdUtils:
                 return (None, None, None)
             
             try:
-                print(f"Attempting to download {file_data['filename']} from user: {file_user}...")
                 self.client.transfers.enqueue(file_user, [file_data])
             except Exception as e:
                 print(f"Error during transfer: {e}")
@@ -180,12 +197,18 @@ class SlskdUtils:
         search = self.client.searches.search_text(search_query)
         search_id = search["id"]
 
-        print(f"Searching for: '{search_query}'")
-        while self.client.searches.state(search_id)["isComplete"] == False:
-            print("Searching...")
-            time.sleep(1)
+        rich_console = Console()
 
-        results = self.client.searches.search_responses(search_id)
-        print(f"Found {len(results)} results")
+        with rich_console.status(f"[light_steel_blue]Searching slskd for:[/light_steel_blue] [bright_white]{search_query}[/bright_white]", spinner="earth") as status:
+            while True:
+                search_state = self.client.searches.state(search_id)
+                num_found_files = search_state["fileCount"]
+                is_complete = search_state["isComplete"]
+                if is_complete:
+                    break
+                status.update(f"[light_steel_blue]Searching slskd for:[/light_steel_blue] [bright_white]{search_query}[/bright_white] [light_steel_blue]| files found[/light_steel_blue]: [bright_white]{num_found_files}[/bright_white]")
+                time.sleep(.1)
 
-        return results
+        search_results = self.client.searches.search_responses(search_id)
+        rich_console.print(f"[light_steel_blue]Search complete for:[/light_steel_blue] [bright_white]{search_query}[/bright_white] [light_steel_blue]| files found[/light_steel_blue]: [bright_white]{len(search_results)}[/bright_white]")
+        return search_results
