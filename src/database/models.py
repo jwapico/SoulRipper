@@ -1,55 +1,9 @@
 import sqlalchemy as sqla
 from sqlalchemy.orm import declarative_base
-from dataclasses import dataclass
+
+from database.trackdata import TrackData
 
 Base = declarative_base()
-
-@dataclass
-class TrackData:
-    """
-    this dataclass contains ALL relevant information about a track in the library
-
-    Attributes:
-        filepath (str): the file path of the track
-        spotify_id (str): the Spotify ID of the track
-        title (str): the title of the track
-        artists (list[(str, str)]): a list of each artists name and id for the track
-        album (str): the album of the track
-        release_date (str): the release date of the track
-        date_liked_spotify (str): the date the track was liked on Spotify
-        explicit (bool): whether the track is explicit or not
-        comments (str): any comments about the track
-    """
-    filepath: str = None
-    spotify_id: str = None
-    title: str = None
-    artists: list[(str, str)] = None
-    album: str = None
-    release_date: str = None
-    date_liked_spotify: str = None
-    explicit: bool = None
-    comments: str = None
-
-    def __repr__(self):
-        return (
-            f"TrackData(title='{self.title}', album='{self.album}', "
-            f"artists={[name for name, _ in self.artists] if self.artists else None}, "
-            f"release_date='{self.release_date}', explicit={self.explicit})"
-        )
-
-    def __hash__(self):
-        if self.spotify_id is not None:
-            return hash(self.spotify_id)
-        else:
-            return hash((self.title, self.album, self.filepath))
-
-    def __eq__(self, other):
-        if not isinstance(other, TrackData):
-            return False
-        if self.spotify_id is not None and other.spotify_id is not None:
-            return self.spotify_id == other.spotify_id
-        else:
-            return (self.title, self.album, self.filepath) == (other.title, other.album, other.filepath)
 
 # table with info about every single track and file in the library
 # TODO: add downloaded_with column to indicate whether the track was downloaded with slskd or yt-dlp
@@ -81,10 +35,22 @@ class Tracks(Base):
             f"date_liked_spotify='{self.date_liked_spotify}', "
             f"comments='{self.comments}')>"
         )
+    
+    @classmethod
+    # TODO: We need a better way of checking for existing tracks when spotify_id and filepath is None
+    def get_existing_track(clc, session, track: TrackData):
+        if track.spotify_id is not None:
+            existing_track = session.query(Tracks).filter_by(spotify_id=track.spotify_id).first()
+        elif track.filepath is not None:
+            existing_track = session.query(Tracks).filter_by(filepath=track.filepath).first()
+        else:
+            existing_track = session.query(Tracks).filter_by(title=track.title, album=track.album).first()
+
+        return existing_track
 
     @classmethod
     def add_track(cls, session, track_data: TrackData):
-        existing_track = get_existing_track(session, track_data)
+        existing_track = Tracks.get_existing_track(session, track_data)
         
         if existing_track:
             print(f"Track ({track_data.title} - {track_data.artists}) already exists in the database - not adding")
@@ -154,7 +120,7 @@ class Tracks(Base):
                     if artist is None:
                         artist = Artists(name=name, spotify_id=artist_spotify_id)
                         session.add(artist)
-                        # session.flush()  # Get the new artist.id
+                        session.flush()  # Get the new artist.id
                         existing_artists[name] = artist  # Add to cache
 
                     assoc = TrackArtist(track=track, artist=artist)
@@ -242,14 +208,3 @@ class TrackArtist(Base):
             f"track_id={self.track_id}, "
             f"artist_id={self.artist_id})>"
         )
-
-# TODO: We need a better way of checking for existing tracks when spotify_id and filepath is None
-def get_existing_track(session, track: TrackData):
-    if track.spotify_id is not None:
-        existing_track = session.query(Tracks).filter_by(spotify_id=track.spotify_id).first()
-    elif track.filepath is not None:
-        existing_track = session.query(Tracks).filter_by(filepath=track.filepath).first()
-    else:
-        existing_track = session.query(Tracks).filter_by(title=track.title, album=track.album).first()
-
-    return existing_track
