@@ -1,9 +1,7 @@
 import sqlalchemy as sqla
-from sqlalchemy.orm import Session
-import os
 
 import database.crud
-import database.queries
+import database.crud.queries
 import database.models as SoulDB
 
 def execute_user_interaction(sql_session, db_engine, spotify_client):
@@ -120,7 +118,7 @@ Enter your choice here: """
                 continue
             
             case "8":
-                database.queries.execute_all_interesting_queries(sql_session)
+                database.crud.queries.execute_all_interesting_queries(sql_session)
                 continue
             
             case "9":
