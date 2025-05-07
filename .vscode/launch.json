@@ -32,7 +32,7 @@
                 "--playlist-url",
                 "https://open.spotify.com/playlist/47uFYjiMl6zRb0gZcy0Nas?si=41b5a57749e3482e",
                 // "https://open.spotify.com/playlist/5NWrtKbRFxMoFNNEwQ2iBI",
-                "--debug"
+                // "--debug"
             ]
         },
         {

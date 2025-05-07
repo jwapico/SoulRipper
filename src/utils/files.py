@@ -1,7 +1,7 @@
 import mutagen
 import json
 
-from database.trackdata import TrackData
+from database.schemas.track import TrackData
 
 # TODO: look at metadata to see what else we can extract - it's different for each file :( - need to find file with great metadata as example
 def extract_file_metadata(filepath: str) -> TrackData:
@@ -37,7 +37,8 @@ def extract_file_metadata(filepath: str) -> TrackData:
         )
 
         return track_data
-    
+
 def save_json(data, filename="debug/debug.json"):
     with open(f"debug/{filename}", "w") as file:
         json.dump(data, file)
+

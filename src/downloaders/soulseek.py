@@ -37,12 +37,14 @@ class SoulseekDownloader:
             print(f"None field returned by attempt_downloads, cannot continue: {(download_file_id, download_filepath, download_username)}")
             return None
 
+        # there prolly many more hidden bugs when it comes to wacky filenames
         download_filename = re.split(r'[\\/]', download_filepath)[-1]
+        safe_filename = download_filename.replace("{", "[").replace("}", "]")
 
         # this is just style config for the rich progress bar
         rich_console = Console()
         rich_progress_bar = Progress(
-            TextColumn(f"[light_steel_blue]Downloading:[/light_steel_blue] [bright_white]{download_filename}"),
+            TextColumn(f"[light_steel_blue]Downloading:[/light_steel_blue] [bright_white]{safe_filename}"),
             BarColumn(
                 bar_width=None,
                 complete_style="green",
@@ -58,11 +60,12 @@ class SoulseekDownloader:
 
         # this scope is just for the rich progress bar idk exactly how it works 
         with rich_progress_bar as rich_progress:
-            task = rich_progress.add_task("", total=100)
+            task = rich_progress.add_task("Downloading", total=100)
 
             # continuously check on the download while it is incomplete, update the progress bar, and break if it takes too long or an exception occurs
             start_time = time.time()
             percent_complete = 0.0
+            slskd_download = None
             while percent_complete < 100:
                 # update the download, progress bar, and timer
                 slskd_download = self.client.transfers.get_download(download_username, download_file_id)

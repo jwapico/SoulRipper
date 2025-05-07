@@ -1,21 +1,15 @@
 from sqlalchemy.orm import Session
 import sqlalchemy as sqla
+import database.services.local_sync
+import database.services.spotify_sync
 from spotify.client import SpotifyClient
-from typing import Tuple
-import subprocess
-import time
-import re
 import os
-import json
-import yaml
 import argparse
-import mutagen
 import dotenv
-import time
 
 from downloaders.soulseek import SoulseekDownloader
-import database.models as SoulDB
-import database.crud
+from database.models.base import Base
+import database.services
 import utils.config
 from utils.config import AppConfig
 import downloaders.orchestrator
@@ -143,13 +137,13 @@ def main():
         metadata.drop_all(db_engine)
 
     # initialize the tables defined in souldb.py
-    SoulDB.Base.metadata.create_all(db_engine)
+    Base.metadata.create_all(db_engine)
 
     # populate the database with metadata found from files in the users output directory
-    database.crud.scan_music_library(sql_session, OUTPUT_PATH)
+    database.services.local_sync.add_local_library_to_db(sql_session, OUTPUT_PATH)
 
     if NEW_TRACK_FILEPATH:
-        database.crud.add_new_track_to_db(sql_session, NEW_TRACK_FILEPATH)
+        database.services.local_sync.add_local_track_to_db(sql_session, NEW_TRACK_FILEPATH)
 
     # if a search query is provided, download the track
     if SEARCH_QUERY:
@@ -160,7 +154,9 @@ def main():
     if DOWNLOAD_ALL_PLAYLISTS:
         all_playlists_metadata = spotify_client.get_all_playlists()
         for playlist_metadata in all_playlists_metadata:
-            database.crud.update_db_with_spotify_playlist(sql_session, spotify_client, playlist_metadata)
+            database.services.spotify_sync.update_db_with_spotify_playlist(sql_session, spotify_client, playlist_metadata)
+
+        # TODO: actually download the playlists
 
     # if the update liked flag is provided, download all liked songs from spotify
     if DOWNLOAD_LIKED:

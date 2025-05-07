@@ -1,13 +1,20 @@
 from sqlalchemy.orm import Session
 import os
 
-import database.crud
-import database.models as SoulDB
+from database.schemas.track import TrackData
+from database.crud.track_crud import get_existing_track
+from database.models.playlists import Playlists
+from database.models.artists import Artists
+from database.models.track_artists import TrackArtists
+from database.models.tracks import Tracks
+from database.models.playlist_tracks import PlaylistTracks
+import database.services
+import database.services.spotify_sync
 from spotify.client import SpotifyClient
 from downloaders.soulseek import SoulseekDownloader
 import downloaders.youtube
 
-def download_from_search_query(slskd_client: SoulseekDownloader, search_query: str, output_path: str, youtube_only: bool) -> str:
+def download_from_search_query(slskd_client: SoulseekDownloader, search_query: str, output_path: str, youtube_only: bool = False) -> str:
     """
     Downloads a track from soulseek or youtube, only downloading from youtube if the query is not found on soulseek
 
@@ -31,23 +38,23 @@ def download_from_search_query(slskd_client: SoulseekDownloader, search_query: s
 def download_liked_songs(slskd_client: SoulseekDownloader, spotify_client: SpotifyClient, sql_session: Session, output_path: str, youtube_only: bool):
     # TODO: this function takes a while to run, we should find a way to check if there any changes before calling it
     # add the users liked songs to the database
-    liked_playlist = database.crud.update_db_with_spotify_liked_tracks(spotify_client, sql_session)
+    liked_playlist = database.services.spotify_sync.update_db_with_spotify_liked_tracks(spotify_client, sql_session)
 
     if liked_playlist is None:
         raise Exception("Error in update_db_with_spotify_liked_tracks(), the playlist row was not returned")
     
-    liked_playlist_tracks_rows = sql_session.query(SoulDB.PlaylistTracks).filter_by(playlist_id=liked_playlist.id).all()
+    liked_playlist_tracks_rows = sql_session.query(PlaylistTracks).filter_by(playlist_id=liked_playlist.id).all()
 
     try:
         # TODO: maybe we should be using the download_track function with a TrackData instead of the search query, hard to get TrackData though since also need to get artists
         #    - we should write a get_trackdata classmethod that will do all this for us
         for playlist_track_row in liked_playlist_tracks_rows:
             track_id = playlist_track_row.track_id
-            track_row = sql_session.query(SoulDB.Tracks).filter_by(id=track_id).one()
+            track_row = sql_session.query(Tracks).filter_by(id=track_id).one()
 
             if track_row.filepath is None:
-                track_artists_rows = sql_session.query(SoulDB.TrackArtist).filter_by(track_id=track_id).all()
-                artist_rows = [sql_session.query(SoulDB.Artists).filter_by(id=track_artists_row.artist_id).one() for track_artists_row in track_artists_rows]
+                track_artists_rows = sql_session.query(TrackArtists).filter_by(track_id=track_id).all()
+                artist_rows = [sql_session.query(Artists).filter_by(id=track_artists_row.artist_id).one() for track_artists_row in track_artists_rows]
                 track_artists = ", ".join([artist_row.name for artist_row in artist_rows])
 
                 search_query = f"{track_row.title} - {track_artists}"
@@ -63,21 +70,21 @@ def download_liked_songs(slskd_client: SoulseekDownloader, spotify_client: Spoti
 # TODO: bruhhhhhhhhhhh the spotify api current_user_saved_tracks() function doesn't return local files FUCK SPOTIFYU there has to be a workaround
 def download_liked_tracks_from_spotify_data(slskd_client: SoulseekDownloader, spotify_client: SpotifyClient, sql_session, output_path: str):
     liked_tracks_data = spotify_client.get_liked_tracks()
-    relevant_tracks_data: list[SoulDB.TrackData] = spotify_client.get_track_data_from_playlist(liked_tracks_data)
+    relevant_tracks_data: list[TrackData] = spotify_client.get_track_data_from_playlist(liked_tracks_data)
 
     track_rows_and_data = []
     for track in relevant_tracks_data:
-        existing_track = SoulDB.get_existing_track(sql_session, track)
+        existing_track = get_existing_track(sql_session, track)
         if existing_track is None:
             filepath = download_track(slskd_client, track, output_path)
             track.filepath = filepath
 
-            track_row = SoulDB.Tracks.add_track(sql_session, track)
+            track_row = Tracks.add_track(sql_session, track)
             track_rows_and_data.append((track_row, track))
 
-    existing_liked_playlist = sql_session.query(SoulDB.Playlists).filter_by(name="SPOTIFY_LIKED_SONGS")
+    existing_liked_playlist = sql_session.query(Playlists).filter_by(name="SPOTIFY_LIKED_SONGS")
     if existing_liked_playlist is None:
-        SoulDB.Playlists.add_playlist(sql_session, spotify_id=None, name="SPOTIFY_LIKED_SONGS", description="User liked songs on Spotify - This playlist is generated by SoulRipper", track_rows_and_data=track_rows_and_data)
+        Playlists.add_playlist(sql_session, spotify_id=None, name="SPOTIFY_LIKED_SONGS", description="User liked songs on Spotify - This playlist is generated by SoulRipper", track_rows_and_data=track_rows_and_data)
 
 def download_playlist_from_spotify_url(slskd_client: SoulseekDownloader, spotify_client: SpotifyClient, sql_session, playlist_url: str, output_path: str):
     """
@@ -95,16 +102,16 @@ def download_playlist_from_spotify_url(slskd_client: SoulseekDownloader, spotify
     output_path = os.path.join(output_path, playlist_info["name"])
     os.makedirs(output_path, exist_ok=True)
 
-    relevant_tracks_data: list[SoulDB.TrackData] = spotify_client.get_track_data_from_playlist(playlist_tracks)
+    relevant_tracks_data: list[TrackData] = spotify_client.get_track_data_from_playlist(playlist_tracks)
 
     track_rows_and_data = []
     for track_data in relevant_tracks_data:
-        existing_track_row = SoulDB.get_existing_track(sql_session, track_data)
+        existing_track_row = get_existing_track(sql_session, track_data)
         # TODO: need better searching !
         if existing_track_row is None:
             filepath = download_track(slskd_client, track_data, output_path)
             track_data.filepath = filepath
-            new_track_row = SoulDB.Tracks.add_track(sql_session, track_data)
+            new_track_row = Tracks.add_track(sql_session, track_data)
             track_rows_and_data.append((new_track_row, track_data))
         else:
             print(f"Track ({track_data.title} - {track_data.artists}) already exists in the database, skipping download.")
@@ -113,33 +120,12 @@ def download_playlist_from_spotify_url(slskd_client: SoulseekDownloader, spotify
                 sql_session.commit()
             track_rows_and_data.append((existing_track_row, track_data))
     # add the playlist to the database if it doesn't already exist
-    existing_playlist = sql_session.query(SoulDB.Playlists).filter_by(spotify_id=playlist_id).first()
+    existing_playlist = sql_session.query(Playlists).filter_by(spotify_id=playlist_id).first()
     if existing_playlist is None:
-        SoulDB.Playlists.add_playlist(sql_session, playlist_id, playlist_info["name"], playlist_info["description"], track_rows_and_data)
+        Playlists.add_playlist(sql_session, playlist_id, playlist_info["name"], playlist_info["description"], track_rows_and_data)
 
 # TODO: this is where better search will happen - construct query from trackdata
-def download_track(slskd_client: SoulseekDownloader, track: SoulDB.TrackData, output_path: str) -> str:
+def download_track(slskd_client: SoulseekDownloader, track: TrackData, output_path: str) -> str:
     search_query = f"{track.title} - {', '.join([artist[0] for artist in track.artists])}"
     download_path = download_from_search_query(slskd_client, search_query, output_path)
-    return download_path
-
-def download_from_search_query(slskd_client: SoulseekDownloader, search_query: str, output_path: str, youtube_only: bool) -> str:
-    """
-    Downloads a track from soulseek or youtube, only downloading from youtube if the query is not found on soulseek
-
-    Args:
-        search_query (str): the song to download, can be a search query
-        output_path (str): the directory to download the song to
-
-    Returns:
-        str: the path to the downloaded file
-    """
-    if youtube_only:
-        return downloaders.youtube.download_track_ytdlp(search_query, output_path)
-
-    download_path = slskd_client.download_track(search_query, output_path)
-
-    if download_path is None:
-        download_path = downloaders.youtube.download_track_ytdlp(search_query, output_path)
-
     return download_path

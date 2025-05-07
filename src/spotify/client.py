@@ -1,7 +1,7 @@
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 from dotenv import load_dotenv
-from database.models import TrackData
+from database.schemas.track import TrackData
 from dataclasses import dataclass
 import yaml
 import time
@@ -146,6 +146,10 @@ class SpotifyClient():
     def get_track_data_from_playlist(self, tracks) -> list[TrackData]:
         relevant_data = []
         for track in tracks:
+            if track["track"] is None:
+                print(f"track field empty for some reason, skipping...\nempty data: {track}")
+                continue
+
             spotify_id = track["track"]["id"]
             title = track["track"]["name"]
             artists = [(artist["name"], artist["id"]) for artist in track["track"]["artists"]]
