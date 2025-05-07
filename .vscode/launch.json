@@ -5,14 +5,14 @@
             "name": "main.py no args",
             "type": "debugpy",
             "request": "launch",
-            "program": "/home/soulripper/src/main.py",
+            "program": "/home/soulripper/src/soulripper/main.py",
             "console": "integratedTerminal",
         },
         {
             "name": "main.py with long playlist",
             "type": "debugpy",
             "request": "launch",
-            "program": "/home/soulripper/src/main.py",
+            "program": "/home/soulripper/src/soulripper/main.py",
             "console": "integratedTerminal",
             "args": [
                 "debug/music/",
@@ -25,7 +25,7 @@
             "name": "main.py with short playlist",
             "type": "debugpy",
             "request": "launch",
-            "program": "/home/soulripper/src/main.py",
+            "program": "/home/soulripper/src/soulripper/main.py",
             "console": "integratedTerminal",
             "args": [
                 "debug/music/",
@@ -39,7 +39,7 @@
             "name": "main.py with download liked",
             "type": "debugpy",
             "request": "launch",
-            "program": "/home/soulripper/src/main.py",
+            "program": "/home/soulripper/src/soulripper/main.py",
             "console": "integratedTerminal",
             "args": [
                 "debug/music/",
@@ -51,7 +51,7 @@
             "name": "main.py with download all playlists",
             "type": "debugpy",
             "request": "launch",
-            "program": "/home/soulripper/src/main.py",
+            "program": "/home/soulripper/src/soulripper/main.py",
             "console": "integratedTerminal",
             "args": [
                 "debug/music/",
@@ -63,7 +63,7 @@
             "name": "drop database",
             "type": "debugpy",
             "request": "launch",
-            "program": "/home/soulripper/src/main.py",
+            "program": "/home/soulripper/src/soulripper/main.py",
             "console": "integratedTerminal",
             "args": [
                 "debug/",
@@ -75,7 +75,7 @@
             "name": "main.py with search query",
             "type": "debugpy",
             "request": "launch",
-            "program": "/home/soulripper/src/main.py",
+            "program": "/home/soulripper/src/soulripper/main.py",
             "console": "integratedTerminal",
             "args": [
                 // "debug/",

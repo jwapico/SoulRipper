@@ -1,12 +1,12 @@
 from sqlalchemy.orm import Session
 import sqlalchemy as sqla
-import database.services.local_sync
-import database.services.spotify_sync
-from spotify.client import SpotifyClient
 import os
 import argparse
 import dotenv
 
+import database.services.local_sync
+import database.services.spotify_sync
+from spotify.client import SpotifyClient
 from downloaders.soulseek import SoulseekDownloader
 from database.models.base import Base
 import database.services
