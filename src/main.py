@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 import sqlalchemy as sqla
-from spotify.spotify_client import SpotifyClient
+from spotify.client import SpotifyClient
 from typing import Tuple
 import subprocess
 import time
@@ -14,7 +14,7 @@ import dotenv
 import time
 
 from downloaders.soulseek import SoulseekDownloader
-import database.souldb as SoulDB
+import database.models as SoulDB
 
 # TODO's (~ roughly in order of importance):
 #   - REFACTOR DOWNLOADING FUNCTIONS (in progress)
