@@ -15,7 +15,8 @@
 				"ClemensPeters.format-json",
                 "qwtel.sqlite-viewer",
                 "eamodio.gitlens",
-                "aaron-bond.better-comments"
+                "aaron-bond.better-comments",
+                "tamasfe.even-better-toml"
 			],
 			"settings": {
 				"terminal.integrated.defaultProfile.linux": "bash"

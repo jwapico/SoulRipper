@@ -1,8 +1,8 @@
 import sqlalchemy as sqla
 
-import database.crud
-import database.crud.queries
-import database.models as SoulDB
+from soulripper.database import update_db_with_spotify_playlist, update_db_with_spotify_liked_tracks
+from soulripper.database import add_track, remove_track, search_for_track, execute_all_interesting_queries
+from soulripper.database import Tracks
 
 def execute_user_interaction(sql_session, db_engine, spotify_client):
         # this code is trash dw its okay :)
@@ -30,8 +30,8 @@ Enter your choice here: """
                 
                 all_playlists_metadata = spotify_client.get_all_playlists()
                 for playlist_metadata in all_playlists_metadata:
-                    database.crud.update_db_with_spotify_playlist(sql_session, spotify_client, playlist_metadata)
-                database.crud.update_db_with_spotify_liked_tracks(spotify_client, sql_session)
+                    update_db_with_spotify_playlist(sql_session, spotify_client, playlist_metadata)
+                update_db_with_spotify_liked_tracks(spotify_client, sql_session)
                 sql_session.flush()
                 sql_session.commit()
                 continue
@@ -39,13 +39,13 @@ Enter your choice here: """
             case "2":
                 all_playlists_metadata = spotify_client.get_all_playlists()
                 for playlist_metadata in all_playlists_metadata:
-                    database.crud.update_db_with_spotify_playlist(sql_session, spotify_client, playlist_metadata)
+                    update_db_with_spotify_playlist(sql_session, spotify_client, playlist_metadata)
                 sql_session.flush()
                 sql_session.commit()
                 continue
 
             case "3":
-                database.crud.update_db_with_spotify_liked_tracks(spotify_client, sql_session)
+                update_db_with_spotify_liked_tracks(spotify_client, sql_session)
                 sql_session.flush()
                 sql_session.commit()
                 continue
@@ -53,13 +53,13 @@ Enter your choice here: """
             case "4":
                 filepath = input("Please enter the filepath of your new track: ")
                 filepath = filepath.strip().strip("'\"")
-                database.crud.add_new_track_to_db(sql_session, filepath)
+                add_track(sql_session, filepath)
                 continue
             
             case "5":
                 try:
                     track_id = int(input("Enter the ID of the track you'd like to modify: "))
-                    track_row = sql_session.query(SoulDB.Tracks).filter_by(id=track_id).one()
+                    track_row = sql_session.query(Tracks).filter_by(id=track_id).one()
                     print(f"\nCurrent track data:")
                     print(f"Title: {track_row.title}")
                     print(f"Filepath: {track_row.filepath}")
@@ -93,12 +93,12 @@ Enter your choice here: """
                         
             case "6":
                 track_id = input("Enter the id of the track you'd like to remove: ")
-                database.crud.remove_track(sql_session, track_id)
+                remove_track(sql_session, track_id)
                 continue
             
             case "7":
                 title = input("Enter the title of the track you'd like to search for: ")
-                results = database.crud.search_for_track(sql_session, title)
+                results = search_for_track(sql_session, title)
 
                 if results == []:
                     print("No matching tracks found...")
@@ -118,7 +118,7 @@ Enter your choice here: """
                 continue
             
             case "8":
-                database.crud.queries.execute_all_interesting_queries(sql_session)
+                execute_all_interesting_queries(sql_session)
                 continue
             
             case "9":

@@ -1,8 +1,9 @@
 import os
 
-from database.schemas.track import TrackData
-import database.crud.track_crud
-import utils.files
+from soulripper.utils import extract_file_metadata
+
+from ..schemas import TrackData
+from ..crud import get_existing_track, add_track
 
 # TODO: this function technically kinda works but we need a better way to extract metadata from the files - most files (all downloaded by yt-dlp) have None for all fields except filepath :/
 #   - maybe we can extract info from filename
@@ -21,7 +22,7 @@ def add_local_library_to_db(sql_session, music_dir: str):
             # TODO: these extensions should be configured with the config file (still need to implement config file </3)
             if file.endswith(".mp3") or file.endswith(".flac") or file.endswith(".wav"):
                 filepath = os.path.abspath(os.path.join(root, file))
-                existing_track = database.crud.track_crud.get_existing_track(sql_session, TrackData(filepath=filepath))
+                existing_track = get_existing_track(sql_session, TrackData(filepath=filepath))
                 if existing_track is None:
                     add_local_track_to_db(sql_session, filepath)
                 else:
@@ -33,7 +34,7 @@ def add_local_track_to_db(sql_session, filepath: str):
         print(f"File {filepath} does not exist, skipping...")
         return
 
-    file_track_data: TrackData = utils.files.extract_file_metadata(filepath)
+    file_track_data: TrackData = extract_file_metadata(filepath)
 
     if file_track_data is None:
         print(f"No metadata found in file {filepath}, skipping...")
@@ -41,7 +42,7 @@ def add_local_track_to_db(sql_session, filepath: str):
 
     print(f"Found track with data: {file_track_data}, adding to database...")
 
-    existing_track = database.crud.track_crud.get_existing_track(sql_session, file_track_data)
+    existing_track = get_existing_track(sql_session, file_track_data)
     if existing_track is None:
-        database.crud.track_crud.add_track(sql_session, file_track_data)
+        add_track(sql_session, file_track_data)
         sql_session.commit()

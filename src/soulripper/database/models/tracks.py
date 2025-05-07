@@ -1,6 +1,6 @@
 import sqlalchemy as sqla
 
-from database.models.base import Base
+from .base import Base
 
 # table with info about every single track and file in the library
 # TODO: add downloaded_with column to indicate whether the track was downloaded with slskd or yt-dlp

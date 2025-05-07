@@ -1,10 +1,7 @@
 from sqlalchemy.orm import Session
 
-from database.schemas.track import TrackData
-
-from database.models.artists import Artists
-from database.models.tracks import Tracks
-from database.models.track_artists import TrackArtists
+from ..models import Tracks, Artists, TrackArtists
+from ..schemas import TrackData
 
 # if we find that functionality in these crud files is being duplicated across multiple models (i.e. we have duplicated get_by_id methods) we can make a BaseCRUD class that all models inherit from
 

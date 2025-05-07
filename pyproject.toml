@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "SoulRipper"
+version = "0.1.0"
+description = "Sync your local music with Spotify using Soulseek and yt-dlp"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Jacob Altizer", email = "altizer16@outlook.com" }]
+dependencies = [
+  "python-dotenv",
+  "slskd-api",
+  "yt-dlp",
+  "sqlalchemy",
+  "spotipy",
+  "mutagen",
+  "keyboard",
+  "pyyaml",
+  "rich",
+]
+
+[project.urls]
+Repository = "https://github.com/jwapico/soulRipper"
+
+[project.scripts]
+soulripper = "soulripper.main:main"

@@ -26,7 +26,7 @@ def download_track_ytdlp(search_query: str, output_path: str) -> str :
         search_query,
         # TODO: this should be better
         # "--cookies-from-browser", "firefox:~/snap/firefox/common/.mozilla/firefox/fpmcru3a.default",
-        "--cookies", "assets/cookies.txt",
+        "--cookies", "/home/soulripper/assets/cookies.txt",
         "-x", "--audio-format", "mp3",
         "--embed-thumbnail", "--add-metadata",
         "--paths", output_path,

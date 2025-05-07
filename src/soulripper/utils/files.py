@@ -1,7 +1,7 @@
 import mutagen
 import json
 
-from database.schemas.track import TrackData
+from soulripper.database.schemas import TrackData
 
 # TODO: look at metadata to see what else we can extract - it's different for each file :( - need to find file with great metadata as example
 def extract_file_metadata(filepath: str) -> TrackData:

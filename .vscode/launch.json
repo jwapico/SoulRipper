@@ -2,83 +2,87 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "main.py no args",
+            "name": "no args",
             "type": "debugpy",
             "request": "launch",
-            "program": "/home/soulripper/src/soulripper/main.py",
-            "console": "integratedTerminal",
-        },
-        {
-            "name": "main.py with long playlist",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "/home/soulripper/src/soulripper/main.py",
+            "module": "soulripper.main",
+            "cwd": "${workspaceFolder}/src",
             "console": "integratedTerminal",
             "args": [
-                "debug/music/",
+                "../debug/"
+            ]
+        },
+        {
+            "name": "--playlist-url (long playlist)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "soulripper.main",
+            "cwd": "${workspaceFolder}/src",
+            "console": "integratedTerminal",
+            "args": [
+                "../debug/music/",
                 "--playlist-url",
                 "https://open.spotify.com/playlist/6h9OgN50iDfClEDryizNe5?si=bd17141666794e3f",
-                "--debug"
             ]
         },
         {
-            "name": "main.py with short playlist",
+            "name": "--playlist-url (short playlist)",
             "type": "debugpy",
             "request": "launch",
-            "program": "/home/soulripper/src/soulripper/main.py",
+            "module": "soulripper.main",
+            "cwd": "${workspaceFolder}/src",
             "console": "integratedTerminal",
             "args": [
-                "debug/music/",
+                "../debug/music/",
                 "--playlist-url",
                 "https://open.spotify.com/playlist/47uFYjiMl6zRb0gZcy0Nas?si=41b5a57749e3482e",
-                // "https://open.spotify.com/playlist/5NWrtKbRFxMoFNNEwQ2iBI",
-                // "--debug"
             ]
         },
         {
-            "name": "main.py with download liked",
+            "name": "--download--liked",
             "type": "debugpy",
             "request": "launch",
-            "program": "/home/soulripper/src/soulripper/main.py",
+            "module": "soulripper.main",
+            "cwd": "${workspaceFolder}/src",
             "console": "integratedTerminal",
             "args": [
-                "debug/music/",
+                "../debug/music/",
                 "--download-liked",
-                // "--debug"
             ]
         },
         {
-            "name": "main.py with download all playlists",
+            "name": "--download-all-playlists",
             "type": "debugpy",
             "request": "launch",
-            "program": "/home/soulripper/src/soulripper/main.py",
+            "module": "soulripper.main",
+            "cwd": "${workspaceFolder}/src",
             "console": "integratedTerminal",
             "args": [
-                "debug/music/",
+                "../debug/music/",
                 "--download-all-playlists",
-                // "--debug"
             ]
         },
         {
-            "name": "drop database",
+            "name": "--drop-database",
             "type": "debugpy",
             "request": "launch",
-            "program": "/home/soulripper/src/soulripper/main.py",
+            "module": "soulripper.main",
+            "cwd": "${workspaceFolder}/src",
             "console": "integratedTerminal",
             "args": [
-                "debug/",
-                "--debug",
+                "../debug/",
                 "--drop-database"
             ]
         },
         {
-            "name": "main.py with search query",
+            "name": "--search-query",
             "type": "debugpy",
             "request": "launch",
-            "program": "/home/soulripper/src/soulripper/main.py",
+            "module": "soulripper.main",
+            "cwd": "${workspaceFolder}/src",
             "console": "integratedTerminal",
             "args": [
-                // "debug/",
+                "../debug/",
                 "--search-query",
                 "Luv (Sic) - Nujabes"
             ]

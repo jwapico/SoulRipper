@@ -1,6 +1,6 @@
 import sqlalchemy as sqla
 
-from database.models.base import Base
+from .base import Base
 
 # table with info about every single artist in the library
 class Artists(Base):

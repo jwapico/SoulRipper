@@ -1,12 +1,13 @@
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 from dotenv import load_dotenv
-from database.schemas.track import TrackData
 from dataclasses import dataclass
 import yaml
 import time
 import re
 import os
+
+from soulripper.database.schemas import TrackData
 
 # immutable dataclass containg the users spotify config information
 @dataclass(frozen=True)
@@ -49,7 +50,7 @@ class SpotifyClient():
                 client_id=user_data.CLIENT_ID,
                 client_secret=user_data.CLIENT_SECRET,
                 redirect_uri=user_data.REDIRECT_URI,
-                open_browser=False
+                open_browser=True
             )
         )
 

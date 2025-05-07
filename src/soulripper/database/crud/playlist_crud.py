@@ -1,10 +1,9 @@
-from database.models.playlists import Playlists
-from database.models.tracks import Tracks
-from database.models.playlist_tracks import PlaylistTracks
-from database.schemas.track import TrackData
-import database.crud.track_crud
+from ..models import Playlists, Tracks, PlaylistTracks
+from ..schemas import TrackData
+from .track_crud import bulk_add_tracks, get_existing_track
 
 # if we find that functionality in these crud files is being duplicated across multiple models (i.e. we have duplicated get_by_id methods) we can make a BaseCRUD class that all models inherit from
+# TODO: we may want to refactor this into a class at some point
 
 def add_playlist(session, spotify_id, name, description):
     new_playlist = Playlists(
@@ -45,7 +44,7 @@ def add_track_data_to_playlist(sql_session, track_data_list: list[TrackData], pl
             seen_non_spotify.add(key)
         new_tracks.add(track_data)
             
-    database.crud.track_crud.bulk_add_tracks(sql_session,new_tracks)
+    bulk_add_tracks(sql_session,new_tracks)
     
     existing_assoc_keys = set(
         (playlist_id, track_id)
@@ -55,7 +54,7 @@ def add_track_data_to_playlist(sql_session, track_data_list: list[TrackData], pl
         ).all()
     )
     for track_data in track_data_list:
-        track = database.crud.track_crud.get_existing_track(sql_session,track_data)
+        track = get_existing_track(sql_session,track_data)
         if track:
             assoc = PlaylistTracks(track_id=track.id, playlist_id=playlist_row.id, added_at=track.date_liked_spotify)
             if (assoc.playlist_id, assoc.track_id) not in existing_assoc_keys:

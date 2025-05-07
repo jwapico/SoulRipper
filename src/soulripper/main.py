@@ -4,15 +4,11 @@ import os
 import argparse
 import dotenv
 
-import database.services.local_sync
-import database.services.spotify_sync
-from spotify.client import SpotifyClient
-from downloaders.soulseek import SoulseekDownloader
-from database.models.base import Base
-import database.services
-import utils.config
-from utils.config import AppConfig
-import downloaders.orchestrator
+from soulripper.database.models import Base
+from soulripper.database.services import add_local_track_to_db, add_local_library_to_db, update_db_with_spotify_playlist
+from soulripper.downloaders import SoulseekDownloader, download_from_search_query, download_liked_songs, download_playlist_from_spotify_url
+from soulripper.spotify import SpotifyClient
+from soulripper.utils import AppConfig, load_config_file
 
 # TODO's (~ roughly in order of importance):
 #   - REFACTOR DOWNLOADING FUNCTIONS (in progress)
@@ -110,7 +106,7 @@ def main():
     YOUTUBE_ONLY = args.yt
 
     CONFIG_FILEPATH = "/home/soulripper/config.yaml"
-    app_config: AppConfig = utils.config.load_config_file(CONFIG_FILEPATH)
+    app_config: AppConfig = load_config_file(CONFIG_FILEPATH)
 
     dotenv.load_dotenv()
     os.makedirs(OUTPUT_PATH, exist_ok=True)
@@ -123,7 +119,7 @@ def main():
     slskd_client = SoulseekDownloader(SLSKD_API_KEY)
 
     # create the engine with the local soul.db file and create a session
-    db_engine = sqla.create_engine("sqlite:///assets/soul.db", echo=DEBUG)
+    db_engine = sqla.create_engine("sqlite:////home/soulripper/assets/soul.db", echo=DEBUG)
     sessionmaker = sqla.orm.sessionmaker(bind=db_engine)
     sql_session: Session = sessionmaker()
 
@@ -140,32 +136,32 @@ def main():
     Base.metadata.create_all(db_engine)
 
     # populate the database with metadata found from files in the users output directory
-    database.services.local_sync.add_local_library_to_db(sql_session, OUTPUT_PATH)
+    add_local_library_to_db(sql_session, OUTPUT_PATH)
 
     if NEW_TRACK_FILEPATH:
-        database.services.local_sync.add_local_track_to_db(sql_session, NEW_TRACK_FILEPATH)
+        add_local_track_to_db(sql_session, NEW_TRACK_FILEPATH)
 
     # if a search query is provided, download the track
     if SEARCH_QUERY:
-        output_path = downloaders.orchestrator.download_from_search_query(slskd_client, SEARCH_QUERY, OUTPUT_PATH, YOUTUBE_ONLY)
+        output_path = download_from_search_query(slskd_client, SEARCH_QUERY, OUTPUT_PATH, YOUTUBE_ONLY)
         # TODO: get metadata and insert into database
 
     # get all playlists from spotify and add them to the database
     if DOWNLOAD_ALL_PLAYLISTS:
         all_playlists_metadata = spotify_client.get_all_playlists()
         for playlist_metadata in all_playlists_metadata:
-            database.services.spotify_sync.update_db_with_spotify_playlist(sql_session, spotify_client, playlist_metadata)
+            update_db_with_spotify_playlist(sql_session, spotify_client, playlist_metadata)
 
         # TODO: actually download the playlists
 
     # if the update liked flag is provided, download all liked songs from spotify
     if DOWNLOAD_LIKED:
-        downloaders.orchestrator.download_liked_songs(slskd_client, spotify_client, sql_session, OUTPUT_PATH, YOUTUBE_ONLY)
+        download_liked_songs(slskd_client, spotify_client, sql_session, OUTPUT_PATH, YOUTUBE_ONLY)
     
     # if a playlist url is provided, download the playlist
     # TODO: refactor this function
     if SPOTIFY_PLAYLIST_URL:
-        downloaders.orchestrator.download_playlist_from_spotify_url(slskd_client, spotify_client, sql_session, SPOTIFY_PLAYLIST_URL, OUTPUT_PATH)
+        download_playlist_from_spotify_url(slskd_client, spotify_client, sql_session, SPOTIFY_PLAYLIST_URL, OUTPUT_PATH)
         pass
 
 if __name__ == "__main__":

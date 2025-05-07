@@ -1,6 +1,6 @@
 import sqlalchemy as sqla
 
-from database.models.base import Base
+from .base import Base
 
 # association table that creates a simple many-to-many relationship between tracks and artists
 class TrackArtists(Base):

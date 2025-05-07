@@ -1,6 +1,6 @@
 import sqlalchemy as sqla
 
-from database.models.base import Base
+from .base import Base
 
 # association table that creates a many-to-many relationship between playlists and tracks with extra attributes
 class PlaylistTracks(Base):

@@ -19,7 +19,7 @@ def load_config_file(config_filepath: str) -> AppConfig:
     if config is None:
         raise Exception("Error reading the config file: config is None")
 
-    OUTPUT_PATH = config["output_path"]
+    OUTPUT_PATH = config["paths"]["output_path"]
     YOUTUBE_ONLY = config["download_behavior"]["youtube_only"]
     SOULSEEK_ONLY = config["download_behavior"]["soulseek_only"]
     MAX_DOWNLOAD_RETRIES = config["download_behavior"]["max_retries"]

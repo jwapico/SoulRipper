@@ -1,7 +1,9 @@
 # TODO: implement all of the unimplemented fields 
 
 spotify_scope: "user-library-read user-read-private playlist-read-collaborative playlist-read-private"
-output_path: ~
+paths:
+  output_path: ~
+  yt_cookie_filepath: /home/soulripper/assets/cookies.txt
 
 download_behavior:
   youtube_only: False

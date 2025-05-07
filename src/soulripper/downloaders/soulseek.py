@@ -90,7 +90,8 @@ class SoulseekDownloader:
         if slskd_download["state"] == "Completed, Succeeded":
             # by default slskd places downloads in assets/downloads/<containing folder name of file from user>/<file from user>
             containing_dir_name = os.path.basename(os.path.dirname(download_filepath.replace("\\", "/")))
-            source_path = os.path.join(f"assets/downloads/{containing_dir_name}/{download_filename}")
+            # TODO: we prolly should not be hard coding these paths - it may be fine bc docker but idk if we want to use docker long term
+            source_path = os.path.join(f"/home/soulripper/assets/downloads/{containing_dir_name}/{download_filename}")
             dest_path = os.path.join(f"{output_path}/{download_filename}")
 
             if not os.path.exists(source_path):

@@ -1,6 +1,6 @@
 import sqlalchemy as sqla
 
-from database.models.base import Base
+from .base import Base
 
 # table with info about every single playlist in the library
 class Playlists(Base):
