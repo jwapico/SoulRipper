@@ -1,0 +1,11 @@
+{
+    // this hides the given directory/file from the vscode file explorer - it is only a visual change
+    "files.exclude": {
+        "**/__pycache__": true,
+        "**/SoulRipper.egg-info": true,
+        "**/.cache": true,
+        "**/venv": true,
+        "**/build": true
+    },
+}
+  

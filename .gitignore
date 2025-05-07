@@ -184,6 +184,7 @@ assets/slskd.yml
 *.webp
 *.flac
 *.json
+!.vscode/settings.json
 *.webm
 assets/soul.db
 assets/soul.db-journal
