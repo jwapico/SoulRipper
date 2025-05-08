@@ -62,13 +62,13 @@ def extract_app_params(config_filepath: str) -> AppParams:
     LOG_FILEPATH = config["debug"]["log_filepath"]
 
     return AppParams(
-        OUTPUT_PATH=OUTPUT_PATH,
-        SOULSEEK_ONLY=SOULSEEK_ONLY,
-        YOUTUBE_ONLY=YOUTUBE_ONLY,
-        YOUTUBE_COOKIE_FILEPATH=YOUTUBE_COOKIE_FILEPATH,
-        MAX_DOWNLOAD_RETRIES=MAX_DOWNLOAD_RETRIES,
-        INACTIVE_DOWNLOAD_TIMEOUT=INACTIVE_DOWNLOAD_TIMEOUT,
-        SPOTIFY_SCOPE=SPOTIFY_SCOPE,
-        LOG_ENABLED=LOG_ENABLED,
-        LOG_FILEPATH=LOG_FILEPATH
+        output_path=OUTPUT_PATH,
+        soulseek_only=SOULSEEK_ONLY,
+        youtube_only=YOUTUBE_ONLY,
+        youtube_cookie_filepath=YOUTUBE_COOKIE_FILEPATH,
+        max_download_retries=MAX_DOWNLOAD_RETRIES,
+        inactive_download_timeout=INACTIVE_DOWNLOAD_TIMEOUT,
+        spotify_scope=SPOTIFY_SCOPE,
+        log_enabled=LOG_ENABLED,
+        log_filepath=LOG_FILEPATH
     )

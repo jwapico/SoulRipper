@@ -106,7 +106,7 @@ def main():
     os.makedirs(OUTPUT_PATH, exist_ok=True)
 
     CONFIG_FILEPATH = "/home/soulripper/config.yaml"
-    APP_PARAMS: AppParams = extract_app_params(CONFIG_FILEPATH)
+    app_params: AppParams = extract_app_params(CONFIG_FILEPATH)
 
     # initialize the spotify client from the users api keys and config
     dotenv.load_dotenv()   
@@ -114,7 +114,7 @@ def main():
         CLIENT_ID=os.getenv("SPOTIFY_CLIENT_ID"), 
         CLIENT_SECRET=os.getenv("SPOTIFY_CLIENT_SECRET"), 
         REDIRECT_URI=os.getenv("SPOTIFY_REDIRECT_URI"), 
-        SCOPE=APP_PARAMS.SPOTIFY_SCOPE
+        SCOPE=app_params.spotify_scope
     )
     spotify_client = SpotifyClient(spotify_user_data)
 

@@ -1,15 +1,15 @@
 from dataclasses import dataclass
 
 # immutable dataclass containing all the configuration data our app needs
-@dataclass(frozen=True)
+@dataclass()
 class AppParams:
-    OUTPUT_PATH: str
-    SOULSEEK_ONLY: bool
-    YOUTUBE_ONLY: bool
-    YOUTUBE_COOKIE_FILEPATH: str
-    MAX_DOWNLOAD_RETRIES: int
-    INACTIVE_DOWNLOAD_TIMEOUT: int
-    SPOTIFY_SCOPE: str
-    LOG_ENABLED: bool
-    LOG_FILEPATH: str
+    output_path: str
+    soulseek_only: bool
+    youtube_only: bool
+    youtube_cookie_filepath: str
+    max_download_retries: int
+    inactive_download_timeout: int
+    spotify_scope: str
+    log_enabled: bool
+    log_filepath: str
 
