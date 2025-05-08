@@ -8,7 +8,7 @@ from soulripper.database.models import Base
 from soulripper.database.services import add_local_track_to_db, add_local_library_to_db, update_db_with_spotify_playlist
 from soulripper.downloaders import SoulseekDownloader, download_from_search_query, download_liked_songs, download_playlist_from_spotify_url
 from soulripper.spotify import SpotifyClient
-from soulripper.utils import AppConfig, load_config_file
+from soulripper.utils import AppParams, load_config_file
 
 # TODO's (~ roughly in order of importance):
 #   - REFACTOR DOWNLOADING FUNCTIONS (in progress)
@@ -19,7 +19,6 @@ from soulripper.utils import AppConfig, load_config_file
 #       - we should prolly also remove the UserInfo table and stop storing api keys in the database lol
 #   - better search and selection for soulseek AND yt-dlp given song title and artist
 #   - better USER INTERFACE - GUI 
-#       - some sort of config file for api keys, directory paths, etc
 #       - we should keep a cli but make it better, the long flags are annoying as fuck
 #           - maybe reimplement the infinite prompting thing from the submission
 #       - we should have a way for the user to verify that each downloaded track is correct
@@ -106,7 +105,7 @@ def main():
     YOUTUBE_ONLY = args.yt
 
     CONFIG_FILEPATH = "/home/soulripper/config.yaml"
-    app_config: AppConfig = load_config_file(CONFIG_FILEPATH)
+    app_config: AppParams = load_config_file(CONFIG_FILEPATH)
 
     dotenv.load_dotenv()
     os.makedirs(OUTPUT_PATH, exist_ok=True)

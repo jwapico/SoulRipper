@@ -39,7 +39,7 @@
             ]
         },
         {
-            "name": "--download--liked",
+            "name": "--download-liked",
             "type": "debugpy",
             "request": "launch",
             "module": "soulripper.main",

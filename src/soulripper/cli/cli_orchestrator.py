@@ -4,6 +4,9 @@ from soulripper.database import update_db_with_spotify_playlist, update_db_with_
 from soulripper.database import add_track, remove_track, search_for_track, execute_all_interesting_queries
 from soulripper.database import Tracks
 
+class CLIOrchestrator():
+    pass
+
 def execute_user_interaction(sql_session, db_engine, spotify_client):
         # this code is trash dw its okay :)
     prompt = """\n\nWelcome to SoulRipper, please select one of the following options:
