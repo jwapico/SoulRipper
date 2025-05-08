@@ -5,7 +5,6 @@ import os
 import dotenv
 
 from soulripper.database.models import Base
-from soulripper.database.services import add_local_library_to_db
 from soulripper.downloaders import SoulseekDownloader
 from soulripper.spotify import SpotifyClient, SpotifyUserData
 from soulripper.utils import AppParams, extract_app_params
