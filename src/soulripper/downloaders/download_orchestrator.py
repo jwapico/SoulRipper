@@ -9,7 +9,7 @@ from soulripper.database.schemas import TrackData
 from soulripper.spotify import SpotifyClient
 from soulripper.downloaders import SoulseekDownloader, download_track_ytdlp
 
-def download_from_search_query(slskd_client: SoulseekDownloader, search_query: str, output_path: str, youtube_only: bool = False) -> str:
+def download_from_search_query(slskd_client: SoulseekDownloader, search_query: str, output_path: str, youtube_only: bool = False, max_retries: int = 5) -> str:
     """
     Downloads a track from soulseek or youtube, only downloading from youtube if the query is not found on soulseek
 
@@ -23,7 +23,7 @@ def download_from_search_query(slskd_client: SoulseekDownloader, search_query: s
     if youtube_only:
         return download_track_ytdlp(search_query, output_path)
 
-    download_path = slskd_client.download_track(search_query, output_path)
+    download_path = slskd_client.download_track(search_query, output_path, max_retries)
 
     if download_path is None:
         download_path = download_track_ytdlp(search_query, output_path)

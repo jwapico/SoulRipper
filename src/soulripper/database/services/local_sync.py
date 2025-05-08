@@ -15,6 +15,7 @@ def add_local_library_to_db(sql_session, music_dir: str):
     Args:
         music_dir (str): the directory to add songs from
     """
+
     print(f"Scanning music library at {music_dir}...")
 
     for root, dirs, files in os.walk(music_dir):

@@ -60,6 +60,10 @@ def extract_app_params(config_filepath: str) -> AppParams:
     SPOTIFY_SCOPE = config["privacy"]["spotify_scope"]
     LOG_ENABLED = config["debug"]["log"]
     LOG_FILEPATH = config["debug"]["log_filepath"]
+    DB_ECHO = config["debug"]["db_echo"]
+
+    if OUTPUT_PATH is None:
+        OUTPUT_PATH = "/home/soulripper/debug/music"
 
     return AppParams(
         output_path=OUTPUT_PATH,
@@ -70,5 +74,6 @@ def extract_app_params(config_filepath: str) -> AppParams:
         inactive_download_timeout=INACTIVE_DOWNLOAD_TIMEOUT,
         spotify_scope=SPOTIFY_SCOPE,
         log_enabled=LOG_ENABLED,
-        log_filepath=LOG_FILEPATH
+        log_filepath=LOG_FILEPATH,
+        db_echo=DB_ECHO
     )

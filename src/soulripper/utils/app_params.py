@@ -12,4 +12,5 @@ class AppParams:
     spotify_scope: str
     log_enabled: bool
     log_filepath: str
+    db_echo: bool
 

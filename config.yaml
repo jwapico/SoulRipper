@@ -16,5 +16,6 @@ privacy:
 debug:
   log: False                                                # unimplemented
   log_filepath: debug/log.txt                               # unimplemented
+  db_echo: False
 
 # TODO: all soulseek stuff too - also should write in api keys from .env file

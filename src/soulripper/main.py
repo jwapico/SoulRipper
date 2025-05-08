@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
 import sqlalchemy as sqla
+import sys
 import os
 import argparse
 import dotenv
@@ -9,6 +10,7 @@ from soulripper.database.services import add_local_track_to_db, add_local_librar
 from soulripper.downloaders import SoulseekDownloader, download_from_search_query, download_liked_songs, download_playlist_from_spotify_url
 from soulripper.spotify import SpotifyClient, SpotifyUserData
 from soulripper.utils import AppParams, extract_app_params
+from soulripper.cli import CLIOrchestrator
 
 # TODO's (~ roughly in order of importance):
 #   - REFACTOR DOWNLOADING FUNCTIONS (in progress)
@@ -45,6 +47,7 @@ from soulripper.utils import AppParams, extract_app_params
 #                   - basically playlists are trees now :o
 #                   - ui would prolly be nested drop downs
 #       - FLUTTER !!!
+#           - we need to write a REST API wrapper for our core functionality
 #           - https://docs.flutter.dev/
 #           - https://docs.flutter.dev/get-started/codelab
 #           - https://docs.flutter.dev/get-started/install/linux/web
@@ -78,35 +81,7 @@ from soulripper.utils import AppParams, extract_app_params
 
 # TODO: we should clean up main - move some shit into helper functions, also still need to restructure this file </3
 def main():
-    # collect commandline arguments
-    parser = argparse.ArgumentParser(description="")
-    parser.add_argument("pos_output_path", nargs="?", default=os.getcwd(), help="The output directory in which your files will be downloaded")
-    parser.add_argument("--output-path", type=str, dest="output_path", help="The output directory in which your files will be downloaded")
-    parser.add_argument("--search-query", type=str, dest="search_query", help="The output directory in which your files will be downloaded")
-    parser.add_argument("--playlist-url", type=str, dest="playlist_url", help="URL of Spotify playlist")
-    parser.add_argument("--download-liked", action="store_true", help="Will download the database with all your liked songs from Spotify")
-    parser.add_argument("--download-all-playlists", action="store_true", help="Will download the database with all your playlists from Spotify")
-    parser.add_argument("--debug", action="store_true", help="Enable debug statements")
-    parser.add_argument("--drop-database", action="store_true", help="Drop the database before running the program")
-    parser.add_argument("--max-retries", type=int, default=5, help="The maximum number of retries for downloading a track")
-    parser.add_argument("--add-track", type=str, help="Add a track to the database - provide the filepath")
-    parser.add_argument("--yt", action="store_true", help="Download exclusively from Youtube")
-    args = parser.parse_args()
-    OUTPUT_PATH = os.path.abspath(args.output_path or args.pos_output_path)
-    SEARCH_QUERY = args.search_query
-    SPOTIFY_PLAYLIST_URL = args.playlist_url
-    DOWNLOAD_LIKED = args.download_liked
-    DOWNLOAD_ALL_PLAYLISTS = args.download_all_playlists
-    DEBUG = args.debug
-    DROP_DATABASE = args.drop_database
-    # TODO: refactor code to use this value (i think its used in download_track only - will need to be passed down thru other functions tho - need to refactor this file for shared variables)
-    MAX_RETRIES = args.max_retries
-    NEW_TRACK_FILEPATH = args.add_track
-    YOUTUBE_ONLY = args.yt
-    os.makedirs(OUTPUT_PATH, exist_ok=True)
-
-    CONFIG_FILEPATH = "/home/soulripper/config.yaml"
-    app_params: AppParams = extract_app_params(CONFIG_FILEPATH)
+    app_params: AppParams = extract_app_params("/home/soulripper/config.yaml")
 
     # initialize the spotify client from the users api keys and config
     dotenv.load_dotenv()   
@@ -119,54 +94,30 @@ def main():
     spotify_client = SpotifyClient(spotify_user_data)
 
     # we communicate with slskd through port 5030, you can visit localhost:5030 to see the web front end. its at slskd:5030 in the docker container though
-    SLSKD_API_KEY = os.getenv("SLSKD_API_KEY")
-    slskd_client = SoulseekDownloader(SLSKD_API_KEY)
+    soulseek_downloader = SoulseekDownloader(os.getenv("SLSKD_API_KEY"))
 
     # create the engine with the local soul.db file and create a session
-    db_engine = sqla.create_engine("sqlite:////home/soulripper/assets/soul.db", echo=DEBUG)
+    db_engine = sqla.create_engine("sqlite:////home/soulripper/assets/soul.db", echo=app_params.db_echo)
     sessionmaker = sqla.orm.sessionmaker(bind=db_engine)
     sql_session: Session = sessionmaker()
-
-    # if the flag was provided drop everything in the database
-    if DROP_DATABASE:
-        if not DEBUG:
-            input("Warning: This will drop all tables in the database. Press enter to continue...")
-
-        metadata = sqla.MetaData()
-        metadata.reflect(bind=db_engine)
-        metadata.drop_all(db_engine)
 
     # initialize the tables defined in souldb.py
     Base.metadata.create_all(db_engine)
 
     # populate the database with metadata found from files in the users output directory
-    add_local_library_to_db(sql_session, OUTPUT_PATH)
+    add_local_library_to_db(sql_session, app_params.output_path)
 
-    if NEW_TRACK_FILEPATH:
-        add_local_track_to_db(sql_session, NEW_TRACK_FILEPATH)
+    # if any cmdline arguments were passed, run the CLIOrchestrator
+    if len(sys.argv) > 1:
+        cli_orchestrator = CLIOrchestrator(
+            spotify_client=spotify_client, 
+            sql_session=sql_session,
+            db_engine=db_engine,
+            soulseek_downloader=soulseek_downloader, 
+            app_params=app_params
+        )
 
-    # if a search query is provided, download the track
-    if SEARCH_QUERY:
-        output_path = download_from_search_query(slskd_client, SEARCH_QUERY, OUTPUT_PATH, YOUTUBE_ONLY)
-        # TODO: get metadata and insert into database
-
-    # get all playlists from spotify and add them to the database
-    if DOWNLOAD_ALL_PLAYLISTS:
-        all_playlists_metadata = spotify_client.get_all_playlists()
-        for playlist_metadata in all_playlists_metadata:
-            update_db_with_spotify_playlist(sql_session, spotify_client, playlist_metadata)
-
-        # TODO: actually download the playlists
-
-    # if the update liked flag is provided, download all liked songs from spotify
-    if DOWNLOAD_LIKED:
-        download_liked_songs(slskd_client, spotify_client, sql_session, OUTPUT_PATH, YOUTUBE_ONLY)
-    
-    # if a playlist url is provided, download the playlist
-    # TODO: refactor this function
-    if SPOTIFY_PLAYLIST_URL:
-        download_playlist_from_spotify_url(slskd_client, spotify_client, sql_session, SPOTIFY_PLAYLIST_URL, OUTPUT_PATH)
-        pass
+        cli_orchestrator.run()
 
 if __name__ == "__main__":
     main()

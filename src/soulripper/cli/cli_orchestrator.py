@@ -1,146 +1,98 @@
 import sqlalchemy as sqla
+from sqlalchemy.orm import Session
+import argparse
+import os
 
-from soulripper.database import update_db_with_spotify_playlist, update_db_with_spotify_liked_tracks
-from soulripper.database import add_track, remove_track, search_for_track, execute_all_interesting_queries
-from soulripper.database import Tracks
+from soulripper.database import update_db_with_spotify_playlist
+from soulripper.database import add_local_library_to_db, add_local_track_to_db
+from soulripper.database import Base
+from soulripper.utils import AppParams
+from soulripper.spotify import SpotifyClient
+from soulripper.downloaders import SoulseekDownloader, download_from_search_query, download_liked_songs, download_playlist_from_spotify_url
 
 class CLIOrchestrator():
-    pass
+    def __init__(self, spotify_client: SpotifyClient, sql_session: Session, db_engine: sqla.Engine, soulseek_downloader: SoulseekDownloader, app_params: AppParams = None):
+        self.spotify_client = spotify_client
+        self.sql_session = sql_session
+        self.db_engine=db_engine
+        self.soulseek_downloader = soulseek_downloader
+        self.app_params = app_params
 
-def execute_user_interaction(sql_session, db_engine, spotify_client):
-        # this code is trash dw its okay :)
-    prompt = """\n\nWelcome to SoulRipper, please select one of the following options:
+    def run(self):
+        args = self.parse_cmdline_args()
 
-    1: Update the database with all of your data from Spotify (playlists and liked songs)
-    2: Update the database with just your playlists from Spotify
-    3: Update the database with your liked songs from Spotify
-    4: Add a new track to the database
-    5: Modify a track in the database
-    6: Remove a track from the database
-    7: Search for a track in the database
-    8: Display some statistics about your library
-    9: Drop the database
-    q: Close the program
+        OUTPUT_PATH = os.path.abspath(args.output_path or args.pos_output_path)
+        SEARCH_QUERY = args.search_query
+        SPOTIFY_PLAYLIST_URL = args.playlist_url
+        DOWNLOAD_LIKED = args.download_liked
+        DOWNLOAD_ALL_PLAYLISTS = args.download_all_playlists
+        LOG = args.log
+        DROP_DATABASE = args.drop_database
+        MAX_RETRIES = args.max_retries
+        NEW_TRACK_FILEPATH = args.add_track
+        YOUTUBE_ONLY = args.yt
 
-Enter your choice here: """
+        # if the flag was provided drop everything in the database
+        if DROP_DATABASE:
+            input("Warning: This will drop all tables in the database. Press enter to continue...")
 
-    while True:
-        choice = input(prompt)
+            metadata = sqla.MetaData()
+            metadata.reflect(bind=self.db_engine)
+            metadata.drop_all(self.db_engine)
 
-        match choice:
-            case "1":
-                sql_session.commit()
-                
-                all_playlists_metadata = spotify_client.get_all_playlists()
-                for playlist_metadata in all_playlists_metadata:
-                    update_db_with_spotify_playlist(sql_session, spotify_client, playlist_metadata)
-                update_db_with_spotify_liked_tracks(spotify_client, sql_session)
-                sql_session.flush()
-                sql_session.commit()
-                continue
+        # initialize the tables defined in souldb.py
+        Base.metadata.create_all(self.db_engine)
 
-            case "2":
-                all_playlists_metadata = spotify_client.get_all_playlists()
-                for playlist_metadata in all_playlists_metadata:
-                    update_db_with_spotify_playlist(sql_session, spotify_client, playlist_metadata)
-                sql_session.flush()
-                sql_session.commit()
-                continue
+        # populate the database with metadata found from files in the users output directory
+        add_local_library_to_db(self.sql_session, OUTPUT_PATH)
 
-            case "3":
-                update_db_with_spotify_liked_tracks(spotify_client, sql_session)
-                sql_session.flush()
-                sql_session.commit()
-                continue
+        if NEW_TRACK_FILEPATH:
+            add_local_track_to_db(self.sql_session, NEW_TRACK_FILEPATH)
 
-            case "4":
-                filepath = input("Please enter the filepath of your new track: ")
-                filepath = filepath.strip().strip("'\"")
-                add_track(sql_session, filepath)
-                continue
-            
-            case "5":
-                try:
-                    track_id = int(input("Enter the ID of the track you'd like to modify: "))
-                    track_row = sql_session.query(Tracks).filter_by(id=track_id).one()
-                    print(f"\nCurrent track data:")
-                    print(f"Title: {track_row.title}")
-                    print(f"Filepath: {track_row.filepath}")
-                    print(f"Album: {track_row.album}")
-                    print(f"Release Date: {track_row.release_date}")
-                    print(f"Explicit: {track_row.explicit}")
-                    print(f"Date Liked: {track_row.date_liked_spotify}")
-                    print(f"Comments: {track_row.comments}\n")
+        # if a search query is provided, download the track
+        if SEARCH_QUERY:
+            output_path = download_from_search_query(self.soulseek_downloader, SEARCH_QUERY, OUTPUT_PATH, YOUTUBE_ONLY, MAX_RETRIES)
+            # TODO: get metadata and insert into database
 
-                    modify_field = input("Enter the name of the field you'd like to modify (e.g., 'title', 'filepath', 'album', 'release_date', 'explicit', 'comments'): ").strip()
-                    if not hasattr(track_row, modify_field):
-                        print(f"Field '{modify_field}' does not exist on Tracks.")
-                        continue
+        # get all playlists from spotify and add them to the database
+        if DOWNLOAD_ALL_PLAYLISTS:
+            all_playlists_metadata = self.spotify_client.get_all_playlists()
+            for playlist_metadata in all_playlists_metadata:
+                update_db_with_spotify_playlist(self.sql_session, self.spotify_client, playlist_metadata)
 
-                    new_value = input(f"Enter the new value for {modify_field}: ").strip()
+            # TODO: actually download the playlists
 
-                    # Handle booleans properly
-                    if modify_field.lower() == "explicit":
-                        new_value = new_value.lower() in ("true", "yes", "1")
+        # if the update liked flag is provided, download all liked songs from spotify
+        if DOWNLOAD_LIKED:
+            download_liked_songs(self.soulseek_downloader, self.spotify_client, self.sql_session, OUTPUT_PATH, YOUTUBE_ONLY)
+        
+        # if a playlist url is provided, download the playlist
+        # TODO: refactor this function
+        if SPOTIFY_PLAYLIST_URL:
+            download_playlist_from_spotify_url(self.soulseek_downloader, self.spotify_client, self.sql_session, SPOTIFY_PLAYLIST_URL, OUTPUT_PATH)
+            pass
 
-                    setattr(track_row, modify_field, new_value)
+    def parse_cmdline_args(self) -> argparse.Namespace:
+        # add all the arguments
+        parser = argparse.ArgumentParser(description="")
+        parser.add_argument("pos_output_path", nargs="?", default=os.getcwd(), help="The output directory in which your files will be downloaded")
+        parser.add_argument("--output-path", type=str, dest="output_path", help="The output directory in which your files will be downloaded")
+        parser.add_argument("--search-query", type=str, dest="search_query", help="The output directory in which your files will be downloaded")
+        parser.add_argument("--playlist-url", type=str, dest="playlist_url", help="URL of Spotify playlist")
+        parser.add_argument("--download-liked", action="store_true", help="Will download the database with all your liked songs from Spotify")
+        parser.add_argument("--download-all-playlists", action="store_true", help="Will download the database with all your playlists from Spotify")
+        parser.add_argument("--log", action="store_true", help="Enable log statements")
+        parser.add_argument("--drop-database", action="store_true", help="Drop the database before running the program")
+        parser.add_argument("--max-retries", type=int, default=5, help="The maximum number of retries for downloading a track")
+        parser.add_argument("--add-track", type=str, help="Add a track to the database - provide the filepath")
+        parser.add_argument("--yt", action="store_true", help="Download exclusively from Youtube")
 
-                    sql_session.flush()
-                    sql_session.commit()
-                    print(f"Track (ID {track_id}) updated successfully!\n")
+        args = parser.parse_args()
 
-                except Exception as e:
-                    print(f"An error occurred: {e}\n")
-
-                continue
-                        
-            case "6":
-                track_id = input("Enter the id of the track you'd like to remove: ")
-                remove_track(sql_session, track_id)
-                continue
-            
-            case "7":
-                title = input("Enter the title of the track you'd like to search for: ")
-                results = search_for_track(sql_session, title)
-
-                if results == []:
-                    print("No matching tracks found...")
-                    continue
-
-                for track in results:
-                    print(f"ID: {track.id}")
-                    print(f"Title: {track.title}")
-                    print(f"Filepath: {track.filepath}")
-                    print(f"Album: {track.album}")
-                    print(f"Release Date: {track.release_date}")
-                    print(f"Explicit: {track.explicit}")
-                    print(f"Date Liked: {track.date_liked_spotify}")
-                    print(f"Comments: {track.comments}")
-                    print("-" * 40)
-
-                continue
-            
-            case "8":
-                execute_all_interesting_queries(sql_session)
-                continue
-            
-            case "9":
-                confirmation = input("Are you sure you want to drop all tables in the database? Type 'yes' to confirm: ")
-                if confirmation == "yes":
-                    sql_session.close()
-                    metadata = sqla.MetaData()
-                    metadata.reflect(bind=db_engine)
-                    metadata.drop_all(db_engine)
-                    print("Database dropped successfully. Closing the program.")
-                    return
-                else:
-                    print("Not dropping the database...")
-                continue
-
-            case "q":
-                return
-            
-            case _:
-                print("Invalid input, try again")
-                continue
-
+        # update our relevant app_params with the new args
+        self.app_params.output_path = os.path.abspath(args.output_path or args.pos_output_path) if os.path.abspath(args.output_path or args.pos_output_path) else self.app_params.output_path
+        self.app_params.log_enabled = args.log if args.log else self.app_params.log_enabled
+        self.app_params.max_download_retries = args.max_retries if args.max_retries else self.app_params.max_download_retries
+        self.app_params.youtube_only = args.yt if args.yt else self.app_params.log_enabled
+        
+        return args
