@@ -21,16 +21,12 @@ class CLIOrchestrator():
     def run(self):
         args = self.parse_cmdline_args()
 
-        OUTPUT_PATH = os.path.abspath(args.output_path or args.pos_output_path)
         SEARCH_QUERY = args.search_query
         SPOTIFY_PLAYLIST_URL = args.playlist_url
         DOWNLOAD_LIKED = args.download_liked
         DOWNLOAD_ALL_PLAYLISTS = args.download_all_playlists
-        LOG = args.log
         DROP_DATABASE = args.drop_database
-        MAX_RETRIES = args.max_retries
         NEW_TRACK_FILEPATH = args.add_track
-        YOUTUBE_ONLY = args.yt
 
         # if the flag was provided drop everything in the database
         if DROP_DATABASE:
@@ -44,14 +40,14 @@ class CLIOrchestrator():
         Base.metadata.create_all(self.db_engine)
 
         # populate the database with metadata found from files in the users output directory
-        add_local_library_to_db(self.sql_session, OUTPUT_PATH)
+        add_local_library_to_db(self.sql_session, self.app_params.output_path)
 
         if NEW_TRACK_FILEPATH:
             add_local_track_to_db(self.sql_session, NEW_TRACK_FILEPATH)
 
         # if a search query is provided, download the track
         if SEARCH_QUERY:
-            output_path = download_from_search_query(self.soulseek_downloader, SEARCH_QUERY, OUTPUT_PATH, YOUTUBE_ONLY, MAX_RETRIES)
+            output_path = download_from_search_query(self.soulseek_downloader, SEARCH_QUERY, self.app_params.output_path, self.app_params.youtube_only, self.app_params.youtube_only)
             # TODO: get metadata and insert into database
 
         # get all playlists from spotify and add them to the database
@@ -64,12 +60,12 @@ class CLIOrchestrator():
 
         # if the update liked flag is provided, download all liked songs from spotify
         if DOWNLOAD_LIKED:
-            download_liked_songs(self.soulseek_downloader, self.spotify_client, self.sql_session, OUTPUT_PATH, YOUTUBE_ONLY)
+            download_liked_songs(self.soulseek_downloader, self.spotify_client, self.sql_session, self.app_params.output_path, self.app_params.youtube_only)
         
         # if a playlist url is provided, download the playlist
         # TODO: refactor this function
         if SPOTIFY_PLAYLIST_URL:
-            download_playlist_from_spotify_url(self.soulseek_downloader, self.spotify_client, self.sql_session, SPOTIFY_PLAYLIST_URL, OUTPUT_PATH)
+            download_playlist_from_spotify_url(self.soulseek_downloader, self.spotify_client, self.sql_session, SPOTIFY_PLAYLIST_URL, self.app_params.output_path)
             pass
 
     def parse_cmdline_args(self) -> argparse.Namespace:
@@ -93,6 +89,6 @@ class CLIOrchestrator():
         self.app_params.output_path = os.path.abspath(args.output_path or args.pos_output_path) if os.path.abspath(args.output_path or args.pos_output_path) else self.app_params.output_path
         self.app_params.log_enabled = args.log if args.log else self.app_params.log_enabled
         self.app_params.max_download_retries = args.max_retries if args.max_retries else self.app_params.max_download_retries
-        self.app_params.youtube_only = args.yt if args.yt else self.app_params.log_enabled
+        self.app_params.youtube_only = args.yt if args.yt else self.app_params.youtube_only
         
         return args
