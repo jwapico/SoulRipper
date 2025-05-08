@@ -18,32 +18,7 @@ class SpotifyUserData:
     SCOPE: str
 
 class SpotifyClient():
-    # whenever a new SpotifyClient gets instantiated, we use the users API config to initialize self.spotipy_client, and set self.USER_ID as instance variables
-    def __init__(self, user_data: SpotifyUserData = None, config_filepath: str = None):
-        if config_filepath is None and user_data is None:
-            raise Exception("You need to provide either a config.yaml filepath or a SpotifyUserData instance when initializing the SpotifyClient")
-
-        # if SpotifyUserData was not passed in manually, we extract from the .env and config.yaml files
-        if user_data is None:
-            # the spotify scope is found in the yaml file
-            with open(config_filepath, "r") as file:
-                config = yaml.safe_load(file)
-
-                if config is None:
-                    raise Exception("Error reading the config file: config is None")
-
-            # API configuration is found the .env file
-            load_dotenv()
-            CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
-            CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
-            REDIRECT_URI = os.getenv("SPOTIFY_REDIRECT_URI")
-            SPOTIFY_SCOPE = config["spotify_scope"]
-
-            if None in (CLIENT_ID, CLIENT_SECRET, REDIRECT_URI, SPOTIFY_SCOPE):
-                raise Exception(f"One or more of the fields needed for SpotifyUserData is None, make sure you have your .env and config.yaml files configured correctly.\nExtracted SpotifyUserData: {user_data}")
-
-            user_data = SpotifyUserData(CLIENT_ID, CLIENT_SECRET, REDIRECT_URI, SPOTIFY_SCOPE)
-
+    def __init__(self, user_data: SpotifyUserData):
         self.spotipy_client = spotipy.Spotify(
             auth_manager=SpotifyOAuth(
                 scope=user_data.SCOPE,
@@ -53,7 +28,6 @@ class SpotifyClient():
                 open_browser=True
             )
         )
-
         self.USER_ID = self.spotipy_client.current_user()["id"]
 
     def get_playlist_id(self, playlist_name):

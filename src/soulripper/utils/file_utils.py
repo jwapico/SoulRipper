@@ -44,7 +44,7 @@ def save_json(data, filename="debug/debug.json"):
     with open(f"debug/{filename}", "w") as file:
         json.dump(data, file)
 
-def load_config_file(config_filepath: str) -> AppParams:
+def extract_app_params(config_filepath: str) -> AppParams:
     with open(config_filepath, "r") as file:
         config = yaml.safe_load(file)
 
@@ -52,19 +52,23 @@ def load_config_file(config_filepath: str) -> AppParams:
         raise Exception("Error reading the config file: config is None")
 
     OUTPUT_PATH = config["paths"]["output_path"]
-    YOUTUBE_ONLY = config["download_behavior"]["youtube_only"]
     SOULSEEK_ONLY = config["download_behavior"]["soulseek_only"]
+    YOUTUBE_ONLY = config["download_behavior"]["youtube_only"]
+    YOUTUBE_COOKIE_FILEPATH = config["paths"]["youtube_cookie_filepath"]
     MAX_DOWNLOAD_RETRIES = config["download_behavior"]["max_retries"]
     INACTIVE_DOWNLOAD_TIMEOUT = config["download_behavior"]["inactive_download_timeout"]
+    SPOTIFY_SCOPE = config["privacy"]["spotify_scope"]
     LOG_ENABLED = config["debug"]["log"]
     LOG_FILEPATH = config["debug"]["log_filepath"]
 
     return AppParams(
-        output_path=OUTPUT_PATH,
-        youtube_only=YOUTUBE_ONLY,
-        soulseek_only=SOULSEEK_ONLY,
-        max_download_retries=MAX_DOWNLOAD_RETRIES,
-        inactive_download_timeout=INACTIVE_DOWNLOAD_TIMEOUT,
-        log_enabled=LOG_ENABLED,
-        log_filepath=LOG_FILEPATH
+        OUTPUT_PATH=OUTPUT_PATH,
+        SOULSEEK_ONLY=SOULSEEK_ONLY,
+        YOUTUBE_ONLY=YOUTUBE_ONLY,
+        YOUTUBE_COOKIE_FILEPATH=YOUTUBE_COOKIE_FILEPATH,
+        MAX_DOWNLOAD_RETRIES=MAX_DOWNLOAD_RETRIES,
+        INACTIVE_DOWNLOAD_TIMEOUT=INACTIVE_DOWNLOAD_TIMEOUT,
+        SPOTIFY_SCOPE=SPOTIFY_SCOPE,
+        LOG_ENABLED=LOG_ENABLED,
+        LOG_FILEPATH=LOG_FILEPATH
     )

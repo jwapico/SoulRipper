@@ -7,8 +7,8 @@ import dotenv
 from soulripper.database.models import Base
 from soulripper.database.services import add_local_track_to_db, add_local_library_to_db, update_db_with_spotify_playlist
 from soulripper.downloaders import SoulseekDownloader, download_from_search_query, download_liked_songs, download_playlist_from_spotify_url
-from soulripper.spotify import SpotifyClient
-from soulripper.utils import AppParams, load_config_file
+from soulripper.spotify import SpotifyClient, SpotifyUserData
+from soulripper.utils import AppParams, extract_app_params
 
 # TODO's (~ roughly in order of importance):
 #   - REFACTOR DOWNLOADING FUNCTIONS (in progress)
@@ -103,15 +103,20 @@ def main():
     MAX_RETRIES = args.max_retries
     NEW_TRACK_FILEPATH = args.add_track
     YOUTUBE_ONLY = args.yt
-
-    CONFIG_FILEPATH = "/home/soulripper/config.yaml"
-    app_config: AppParams = load_config_file(CONFIG_FILEPATH)
-
-    dotenv.load_dotenv()
     os.makedirs(OUTPUT_PATH, exist_ok=True)
 
-    # connect to spotify API
-    spotify_client = SpotifyClient(config_filepath=CONFIG_FILEPATH)
+    CONFIG_FILEPATH = "/home/soulripper/config.yaml"
+    APP_PARAMS: AppParams = extract_app_params(CONFIG_FILEPATH)
+
+    # initialize the spotify client from the users api keys and config
+    dotenv.load_dotenv()   
+    spotify_user_data = SpotifyUserData(
+        CLIENT_ID=os.getenv("SPOTIFY_CLIENT_ID"), 
+        CLIENT_SECRET=os.getenv("SPOTIFY_CLIENT_SECRET"), 
+        REDIRECT_URI=os.getenv("SPOTIFY_REDIRECT_URI"), 
+        SCOPE=APP_PARAMS.SPOTIFY_SCOPE
+    )
+    spotify_client = SpotifyClient(spotify_user_data)
 
     # we communicate with slskd through port 5030, you can visit localhost:5030 to see the web front end. its at slskd:5030 in the docker container though
     SLSKD_API_KEY = os.getenv("SLSKD_API_KEY")

@@ -1,15 +1,17 @@
 # TODO: implement all of the unimplemented fields 
 
-spotify_scope: "user-library-read user-read-private playlist-read-collaborative playlist-read-private"
 paths:
   output_path: ~
-  yt_cookie_filepath: /home/soulripper/assets/cookies.txt
+  youtube_cookie_filepath: /home/soulripper/assets/cookies.txt
 
 download_behavior:
   youtube_only: False
   soulseek_only: False                                      # unimplemented
   max_retries: 5                                            # unimplemented
   inactive_download_timeout: 10                             # unimplemented
+
+privacy:
+  spotify_scope: "user-library-read user-read-private playlist-read-collaborative playlist-read-private"
 
 debug:
   log: False                                                # unimplemented
