@@ -1,7 +1,9 @@
 # TODO: implement all of the unimplemented fields 
 
+# NOTE: all paths should be absolute
+
 paths:
-  output_path: ~
+  output_path: /home/soulripper/debug/music
   youtube_cookie_filepath: /home/soulripper/assets/cookies.txt
 
 download_behavior:
@@ -10,12 +12,16 @@ download_behavior:
   max_retries: 5                                            # unimplemented
   inactive_download_timeout: 10                             # unimplemented
 
+audio:
+  valid_extensions:
+    - ".mp3"
+    - ".flac"
+    - ".wav"
+
 privacy:
   spotify_scope: "user-library-read user-read-private playlist-read-collaborative playlist-read-private"
 
 debug:
   log: False                                                # unimplemented
-  log_filepath: debug/log.txt                               # unimplemented
+  log_filepath: /home/soulripper/debug/log.txt              # unimplemented
   db_echo: False
-
-# TODO: all soulseek stuff too - also should write in api keys from .env file

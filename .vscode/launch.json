@@ -8,9 +8,6 @@
             "module": "soulripper.main",
             "cwd": "${workspaceFolder}/src",
             "console": "integratedTerminal",
-            "args": [
-                "../debug/"
-            ]
         },
         {
             "name": "--playlist-url (long playlist)",
@@ -20,7 +17,6 @@
             "cwd": "${workspaceFolder}/src",
             "console": "integratedTerminal",
             "args": [
-                "../debug/music/",
                 "--playlist-url",
                 "https://open.spotify.com/playlist/6h9OgN50iDfClEDryizNe5?si=bd17141666794e3f",
             ]
@@ -33,7 +29,6 @@
             "cwd": "${workspaceFolder}/src",
             "console": "integratedTerminal",
             "args": [
-                "../debug/music/",
                 "--playlist-url",
                 "https://open.spotify.com/playlist/47uFYjiMl6zRb0gZcy0Nas?si=41b5a57749e3482e",
             ]
@@ -46,7 +41,6 @@
             "cwd": "${workspaceFolder}/src",
             "console": "integratedTerminal",
             "args": [
-                "../debug/music/",
                 "--download-liked",
             ]
         },
@@ -58,7 +52,6 @@
             "cwd": "${workspaceFolder}/src",
             "console": "integratedTerminal",
             "args": [
-                "../debug/music/",
                 "--download-all-playlists",
             ]
         },
@@ -70,7 +63,6 @@
             "cwd": "${workspaceFolder}/src",
             "console": "integratedTerminal",
             "args": [
-                "../debug/",
                 "--drop-database"
             ]
         },
@@ -82,7 +74,6 @@
             "cwd": "${workspaceFolder}/src",
             "console": "integratedTerminal",
             "args": [
-                "../debug/",
                 "--search-query",
                 "Luv (Sic) - Nujabes"
             ]

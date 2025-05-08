@@ -52,18 +52,16 @@ def extract_app_params(config_filepath: str) -> AppParams:
         raise Exception("Error reading the config file: config is None")
 
     OUTPUT_PATH = config["paths"]["output_path"]
-    SOULSEEK_ONLY = config["download_behavior"]["soulseek_only"]
-    YOUTUBE_ONLY = config["download_behavior"]["youtube_only"]
-    YOUTUBE_COOKIE_FILEPATH = config["paths"]["youtube_cookie_filepath"]
-    MAX_DOWNLOAD_RETRIES = config["download_behavior"]["max_retries"]
-    INACTIVE_DOWNLOAD_TIMEOUT = config["download_behavior"]["inactive_download_timeout"]
-    SPOTIFY_SCOPE = config["privacy"]["spotify_scope"]
-    LOG_ENABLED = config["debug"]["log"]
-    LOG_FILEPATH = config["debug"]["log_filepath"]
-    DB_ECHO = config["debug"]["db_echo"]
-
-    if OUTPUT_PATH is None:
-        OUTPUT_PATH = "/home/soulripper/debug/music"
+    SOULSEEK_ONLY = config.get("download_behavior", {}).get("soulseek_only", False)
+    YOUTUBE_ONLY = config.get("download_behavior", {}).get("youtube_only", False)
+    YOUTUBE_COOKIE_FILEPATH = config.get("paths", {}).get("youtube_cookie_filepath", None)
+    MAX_DOWNLOAD_RETRIES = config.get("download_behavior", {}).get("max_retries", 5)
+    INACTIVE_DOWNLOAD_TIMEOUT = config.get("download_behavior", {}).get("inactive_download_timeout", 10)
+    SPOTIFY_SCOPE = config.get("privacy", {}).get("spotify_scope", "user-library-read user-read-private playlist-read-collaborative playlist-read-private")
+    LOG_ENABLED = config.get("debug", {}).get("log", False)
+    LOG_FILEPATH = config.get("debug", {}).get("log_filepath", "/home/soulripper/debug/log.txt")
+    DB_ECHO = config.get("debug", {}).get("db_echo", False)
+    EXTENSIONS = config.get("audio", {}).get("valid_extensions", [".mp3", ".flac", ".wav"])
 
     return AppParams(
         output_path=OUTPUT_PATH,
@@ -75,5 +73,6 @@ def extract_app_params(config_filepath: str) -> AppParams:
         spotify_scope=SPOTIFY_SCOPE,
         log_enabled=LOG_ENABLED,
         log_filepath=LOG_FILEPATH,
-        db_echo=DB_ECHO
+        db_echo=DB_ECHO,
+        valid_music_extensions=EXTENSIONS
     )

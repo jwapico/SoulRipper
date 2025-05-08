@@ -40,7 +40,7 @@ class CLIOrchestrator():
         Base.metadata.create_all(self.db_engine)
 
         # populate the database with metadata found from files in the users output directory
-        add_local_library_to_db(self.sql_session, self.app_params.output_path)
+        add_local_library_to_db(self.sql_session, self.app_params.output_path, self.app_params.valid_music_extensions)
 
         if NEW_TRACK_FILEPATH:
             add_local_track_to_db(self.sql_session, NEW_TRACK_FILEPATH)
@@ -71,7 +71,6 @@ class CLIOrchestrator():
     def parse_cmdline_args(self) -> argparse.Namespace:
         # add all the arguments
         parser = argparse.ArgumentParser(description="")
-        parser.add_argument("pos_output_path", nargs="?", default=os.getcwd(), help="The output directory in which your files will be downloaded")
         parser.add_argument("--output-path", type=str, dest="output_path", help="The output directory in which your files will be downloaded")
         parser.add_argument("--search-query", type=str, dest="search_query", help="The output directory in which your files will be downloaded")
         parser.add_argument("--playlist-url", type=str, dest="playlist_url", help="URL of Spotify playlist")
@@ -86,7 +85,7 @@ class CLIOrchestrator():
         args = parser.parse_args()
 
         # update our relevant app_params with the new args
-        self.app_params.output_path = os.path.abspath(args.output_path or args.pos_output_path) if os.path.abspath(args.output_path or args.pos_output_path) else self.app_params.output_path
+        self.app_params.output_path = os.path.abspath(args.output_path) if args.output_path else self.app_params.output_path
         self.app_params.log_enabled = args.log if args.log else self.app_params.log_enabled
         self.app_params.max_download_retries = args.max_retries if args.max_retries else self.app_params.max_download_retries
         self.app_params.youtube_only = args.yt if args.yt else self.app_params.youtube_only

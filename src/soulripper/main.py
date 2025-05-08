@@ -35,9 +35,6 @@ def main():
     # initialize the tables defined in souldb.py
     Base.metadata.create_all(db_engine)
 
-    # populate the database with metadata found from files in the users output directory
-    add_local_library_to_db(sql_session, app_params.output_path)
-
     # if any cmdline arguments were passed, run the CLI Orchestrator
     if len(sys.argv) > 1:
         cli_orchestrator = CLIOrchestrator(

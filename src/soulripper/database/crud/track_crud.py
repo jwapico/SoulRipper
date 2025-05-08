@@ -52,7 +52,7 @@ def add_track(session: Session, track_data: TrackData):
 
             track.track_artists.append(track_artist_assoc)
 
-    session.flush()
+    session.commit()
     return track
 
 def bulk_add_tracks(session, track_data_list: set[TrackData]):

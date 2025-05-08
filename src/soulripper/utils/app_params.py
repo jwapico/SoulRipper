@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import List
 
 # immutable dataclass containing all the configuration data our app needs
 @dataclass()
@@ -13,4 +14,5 @@ class AppParams:
     log_enabled: bool
     log_filepath: str
     db_echo: bool
+    valid_music_extensions: List[str]
 
