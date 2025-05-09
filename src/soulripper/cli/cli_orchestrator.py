@@ -10,6 +10,9 @@ from soulripper.utils import AppParams
 from soulripper.spotify import SpotifyClient
 from soulripper.downloaders import SoulseekDownloader, download_from_search_query, download_liked_songs, download_playlist_from_spotify_url
 
+# TODO: Implement event bus
+#   - https://github.com/mdapena/pyventus
+
 class CLIOrchestrator():
     def __init__(self, spotify_client: SpotifyClient, sql_session: Session, db_engine: sqla.Engine, soulseek_downloader: SoulseekDownloader, app_params: AppParams = None):
         self.spotify_client = spotify_client
