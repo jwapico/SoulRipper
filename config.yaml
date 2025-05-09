@@ -5,6 +5,7 @@
 paths:
   output_path: /home/soulripper/debug/music
   youtube_cookie_filepath: /home/soulripper/assets/cookies.txt
+  database_path: /home/soulripper/assets/soul.db
 
 download_behavior:
   youtube_only: False

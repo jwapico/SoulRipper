@@ -27,7 +27,7 @@ def main():
     soulseek_downloader = SoulseekDownloader(os.getenv("SLSKD_API_KEY"))
 
     # create the engine with the local soul.db file and create a session
-    db_engine = sqla.create_engine("sqlite:////home/soulripper/assets/soul.db", echo=app_params.db_echo)
+    db_engine = sqla.create_engine(f"sqlite:///{app_params.database_path}", echo=app_params.db_echo)
     sessionmaker = sqla.orm.sessionmaker(bind=db_engine)
     sql_session: Session = sessionmaker()
 

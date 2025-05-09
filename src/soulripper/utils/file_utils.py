@@ -52,6 +52,7 @@ def extract_app_params(config_filepath: str) -> AppParams:
         raise Exception("Error reading the config file: config is None")
 
     OUTPUT_PATH = config["paths"]["output_path"]
+    DATABASE_PATH = config["paths"]["database_path"]
     SOULSEEK_ONLY = config.get("download_behavior", {}).get("soulseek_only", False)
     YOUTUBE_ONLY = config.get("download_behavior", {}).get("youtube_only", False)
     YOUTUBE_COOKIE_FILEPATH = config.get("paths", {}).get("youtube_cookie_filepath", None)
@@ -65,6 +66,7 @@ def extract_app_params(config_filepath: str) -> AppParams:
 
     return AppParams(
         output_path=OUTPUT_PATH,
+        database_path=DATABASE_PATH,
         soulseek_only=SOULSEEK_ONLY,
         youtube_only=YOUTUBE_ONLY,
         youtube_cookie_filepath=YOUTUBE_COOKIE_FILEPATH,

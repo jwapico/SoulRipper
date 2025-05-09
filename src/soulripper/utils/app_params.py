@@ -5,6 +5,7 @@ from typing import List
 @dataclass()
 class AppParams:
     output_path: str
+    database_path: str
     soulseek_only: bool
     youtube_only: bool
     youtube_cookie_filepath: str
