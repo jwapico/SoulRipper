@@ -1,5 +1,4 @@
 import logging
-import json
 
 def init_logger(log_filepath: str, log_level: int, db_echo: bool):
     logging.basicConfig(
@@ -13,6 +12,3 @@ def init_logger(log_filepath: str, log_level: int, db_echo: bool):
 
     if db_echo:
         logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
-
-def pprint(data):
-    print(json.dumps(data, indent=4))

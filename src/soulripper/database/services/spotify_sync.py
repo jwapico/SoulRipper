@@ -1,10 +1,14 @@
+import logging
+
 from soulripper.spotify import SpotifyClient
 from ..schemas import TrackData
 from ..models import Playlists
 from ..crud import add_playlist, add_track_data_to_playlist
 
+logger = logging.getLogger(__name__)
+
 def update_db_with_spotify_playlist(sql_session, spotify_client: SpotifyClient, playlist_metadata):
-    print(f"Updating database with tracks from playlist {playlist_metadata['name']}...")
+    logger.info(f"Updating database with tracks from playlist {playlist_metadata['name']}...")
 
     playlist_tracks = spotify_client.get_playlist_tracks(playlist_metadata['id'])
     relevant_tracks_data: list[TrackData] = spotify_client.get_track_data_from_playlist(playlist_tracks)

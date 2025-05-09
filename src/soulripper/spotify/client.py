@@ -1,13 +1,13 @@
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
-from dotenv import load_dotenv
 from dataclasses import dataclass
-import yaml
+import logging
 import time
 import re
-import os
 
 from soulripper.database.schemas import TrackData
+
+logger = logging.getLogger(__name__)
 
 # immutable dataclass containg the users spotify config information
 @dataclass(frozen=True)
@@ -74,7 +74,7 @@ class SpotifyClient():
                 if len(response["items"]) < 100:
                     break
             except Exception as e:
-                print(f"Spotify error, sleeping and trying again: {e}")
+                logger.error(f"Spotify error, sleeping and trying again: {e}")
                 time.sleep(5)
                 continue
             
@@ -104,7 +104,7 @@ class SpotifyClient():
                     break
 
             except Exception as e:
-                print(f"Spotify API error: {e}\nSleeping and retrying...")
+                logger.error(f"Spotify API error: {e}\nSleeping and retrying...")
                 time.sleep(5)
                 continue
             
@@ -122,7 +122,7 @@ class SpotifyClient():
         relevant_data = []
         for track in tracks:
             if track["track"] is None:
-                print(f"track field empty for some reason, skipping...\nempty data: {track}")
+                logger.warning(f"track field of spotify track empty for some reason, skipping...\nempty data: {track}")
                 continue
 
             spotify_id = track["track"]["id"]

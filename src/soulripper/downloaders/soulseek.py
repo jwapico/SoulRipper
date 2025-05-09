@@ -1,10 +1,13 @@
 import slskd_api
 from rich.console import Console
 from rich.progress import Progress, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn
+import logging
 import shutil
 import time
 import os
 import re
+
+logger = logging.getLogger(__name__)
 
 class SoulseekDownloader:
     def __init__(self, api_key: str):
@@ -28,13 +31,13 @@ class SoulseekDownloader:
         # search slskd using the passed in query
         search_results = self.search(search_query)
         if search_results is None:
-            print("No results found on Soulseek")
+            logger.info("No results found on Soulseek")
             return None
         
         # attempt to start the download
         download_file_id, download_filepath, download_username = self.start_download(search_results, max_retries)
         if None in (download_file_id, download_filepath, download_username):
-            print(f"None field returned by attempt_downloads, cannot continue: {(download_file_id, download_filepath, download_username)}")
+            logger.info(f"None field returned by attempt_downloads, cannot continue: {(download_file_id, download_filepath, download_username)}")
             return None
 
         # there prolly many more hidden bugs when it comes to wacky filenames
@@ -76,12 +79,12 @@ class SoulseekDownloader:
                 # if the download has taken longer than the timeout time AND the download is still at 0%, give up and break
                 # TODO: we prolly need a better way of doing this, what if the download goes stale at 50%? i think there is way to look at transfer rates
                 if elapsed_time > inactive_download_timeout * 60 and percent_complete == 0.0:
-                    print(f'Download was inactive for {inactive_download_timeout} minutes, skipping')
+                    logging.info(f'Download was inactive for {inactive_download_timeout} minutes, skipping')
                     break
 
                 # if something goes wrong on slskd's end an 'exception' field appears in the download - this is bad so we break if this happens
                 if "exception" in slskd_download.keys():
-                    print(f'Exception occured in the download: {slskd_download["exception"]}')
+                    logging.info(f'Exception occured in the soulseek download: {slskd_download["exception"]}')
                     break
 
                 time.sleep(.1)
@@ -95,13 +98,13 @@ class SoulseekDownloader:
             dest_path = os.path.join(f"{output_path}/{download_filename}")
 
             if not os.path.exists(source_path):
-                print(f"ERROR: slskd download state is 'Completed, Succeeded' but the file was not found: {source_path}")
+                logger.error(f"SLSKD download state is 'Completed, Succeeded' but the file was not found: {source_path}")
                 return None
 
             shutil.move(source_path, dest_path)
             return dest_path
         else:
-            print(f"Download failed: {slskd_download['state']}")
+            logger.info(f"Download failed: {slskd_download['state']}")
 
             if slskd_download['state'] == "InProgress":
                 raise Exception("DEBUG: Something sus has occured, download got to 100 but state is still InProgress")
@@ -112,13 +115,13 @@ class SoulseekDownloader:
         # attempt to download the each best search result until we reach max_retries or we run out of search_results
         for attempt_count, (file_data, file_user) in enumerate(search_results):
             if attempt_count > max_retries:
-                print(f"Max retries ({max_retries}) reached for your query, giving up on SoulSeek...")
+                logger.info(f"Max retries ({max_retries}) reached for your query, giving up on SoulSeek...")
                 return (None, None, None)
             
             try:
                 self.client.transfers.enqueue(file_user, [file_data])
             except Exception as e:
-                print(f"Error during transfer: {e}")
+                logger.error(f"Error during transfer: {e}")
                 continue
 
             filename = file_data["filename"]
@@ -160,7 +163,7 @@ class SoulseekDownloader:
         # filter for just relevant results - audio files that are downloadable from the user
         relevant_results = self.filter_search_results(search_results)
         if relevant_results is None:
-            print("No relevant results found on Soulseek")
+            logger.info("No relevant results found on Soulseek")
             return None
 
         rich_console.print(f"[light_steel_blue]Search complete for:[/light_steel_blue] [bright_white]{search_query}[/bright_white] [light_steel_blue]| Relevant Files found[/light_steel_blue]: [bright_white]{len(relevant_results)}[/bright_white]")
@@ -191,7 +194,7 @@ class SoulseekDownloader:
                 match = re.search(r'\.([a-zA-Z0-9]+)$', file["filename"])
 
                 if match is None:
-                    print(f"Skipping due to invalid file extension: {file['filename']}")
+                    logger.debug(f"Skipping due to invalid file extension: {file['filename']}")
                     continue
 
                 file_extension = match.group(1)

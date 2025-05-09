@@ -1,4 +1,7 @@
 import sqlalchemy as sqla
+import logging
+
+logger = logging.getLogger(__name__)
 
 # TODO: we need to figure out which we want to keep and which are useless, we may also want to add more
 
@@ -36,7 +39,7 @@ def get_missing_tracks(sql_session):
     """
 
     result = sql_session.execute(sqla.text(query)).fetchall()
-    print(f"Found {len(result)} missing tracks (filepath is null)")
+    logger.info(f"Found {len(result)} missing tracks (filepath is null)")
     return result
 
 # Join + filter
@@ -50,7 +53,7 @@ def get_tracks_by_artist(sql_session, artist_name):
     """
 
     result = sql_session.execute(sqla.text(query), {"artist": artist_name}).fetchall()
-    print(f"Found {len(result)} tracks by artist {artist_name}")
+    logger.info(f"Found {len(result)} tracks by artist {artist_name}")
     return result
 
 # Simple filter query
@@ -62,7 +65,7 @@ def get_tracks_by_album(sql_session, album_name):
     """
 
     result = sql_session.execute(sqla.text(query), {"album": album_name}).fetchall()
-    print(f"Found {len(result)} tracks in album {album_name}")
+    logger.info(f"Found {len(result)} tracks in album {album_name}")
     return result
 
 # Grouping & aggregation
@@ -80,7 +83,7 @@ def get_favorite_artists(sql_session):
     """)
 
     result = sql_session.execute(stmt).fetchall()
-    print(f"Top 10 favorite artists: {[result[0] for result in result]}")
+    logger.info(f"Top 10 favorite artists: {[result[0] for result in result]}")
     return result
 
 # Aggregation
@@ -91,7 +94,7 @@ def get_num_unique_tracks(sql_session):
     """
 
     result = sql_session.execute(sqla.text(query)).fetchone()
-    print(f"Number of unique tracks: {result[0]}")
+    logger.info(f"Number of unique tracks: {result[0]}")
     return result
 
 # Aggregation
@@ -103,7 +106,7 @@ def get_num_unique_artists(sql_session):
     """)
 
     result = sql_session.execute(stmt).fetchone()
-    print(f"Number of unique artists: {result[0]}")
+    logger.info(f"Number of unique artists: {result[0]}")
     return result
 
 # Aggregation
@@ -114,7 +117,7 @@ def get_num_unique_albums(sql_session):
     """
 
     result = sql_session.execute(sqla.text(query)).fetchone()
-    print(f"Number of unique albums: {result[0]}")
+    logger.info(f"Number of unique albums: {result[0]}")
     return result
 
 # Grouping & aggregation
@@ -132,7 +135,7 @@ def get_favorite_tracks(sql_session):
     """
 
     result = sql_session.execute(sqla.text(query)).fetchall()
-    print(f"Top 10 favorite tracks: {[result[0] for result in result]}")
+    logger.info(f"Top 10 favorite tracks: {[result[0] for result in result]}")
     return result
 
 # Subquery
@@ -147,7 +150,7 @@ def get_average_tracks_per_playlist(sql_session):
     """
 
     result = sql_session.execute(sqla.text(query)).fetchone()
-    print(f"Average number of tracks per playlist: {result[0]}")
+    logger.info(f"Average number of tracks per playlist: {result[0]}")
     return result
 
 # CTE 
@@ -175,7 +178,7 @@ def get_playlists_with_above_avg_track_count(sql_session):
     """)
 
     result = sql_session.execute(stmt).fetchall()
-    print(f"Playlists with above-average track count: {[row.playlist_name for row in result]}")
+    logger.info(f"Playlists with above-average track count: {[row.playlist_name for row in result]}")
     return result
 
 # Window function
@@ -208,6 +211,6 @@ def get_top_3_tracks_per_artist(sql_session):
 
     for artist, track, count in rows:
         if None not in (artist, track, count):
-            print(f"{artist or '<Unknown Artist>':40} | {track:75} | in {count} playlists")
+            logger.info(f"{artist or '<Unknown Artist>':40} | {track:75} | in {count} playlists")
     
     return rows

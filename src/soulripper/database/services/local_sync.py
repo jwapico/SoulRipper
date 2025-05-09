@@ -1,10 +1,13 @@
 import os
 from typing import List
+import logging
 
 from soulripper.utils import extract_file_metadata
 
 from ..schemas import TrackData
 from ..crud import get_existing_track, add_track
+
+logger = logging.getLogger(__name__)
 
 # TODO: we need to refactor this function so that the only way it interacts with the database is through our crud package. 
 # 
@@ -20,8 +23,6 @@ def add_local_library_to_db(sql_session, music_dir: str, valid_extensions: List[
         music_dir (str): the directory to add songs from
     """
 
-    print(f"Scanning music library at {music_dir}...")
-
     for root, dirs, files in os.walk(music_dir):
         for filename in files:
             file_extension = os.path.splitext(filename)[1]
@@ -31,20 +32,20 @@ def add_local_library_to_db(sql_session, music_dir: str, valid_extensions: List[
                 if existing_track is None:
                     add_local_track_to_db(sql_session, filepath)
                 else:
-                    print(f"track with filepath: {filepath} already found in database, skipping")
+                    logger.info(f"track with filepath: {filepath} already found in database, skipping")
 
 def add_local_track_to_db(sql_session, filepath: str):
     if not os.path.exists(filepath):
-        print(f"File {filepath} does not exist, skipping...")
+        logger.warning(f"The file you tried to add ({filepath}) does not exist, skipping...")
         return
 
     file_track_data: TrackData = extract_file_metadata(filepath)
 
     if file_track_data is None:
-        print(f"No metadata found in file {filepath}, skipping...")
+        logger.info(f"No metadata found in file {filepath}, skipping...")
         file_track_data = TrackData(filepath=filepath, comments="WARNING: Error while extracting metadata. This likely means the file is corrupted or empty")
 
-    print(f"Found track with data: {file_track_data}, adding to database...")
+    logger.info(f"Found track with data: {file_track_data}, adding to database...")
 
     existing_track = get_existing_track(sql_session, file_track_data)
     if existing_track is None:

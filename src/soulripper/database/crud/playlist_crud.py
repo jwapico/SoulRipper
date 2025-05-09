@@ -1,6 +1,10 @@
+import logging
+
 from ..models import Playlists, Tracks, PlaylistTracks
 from ..schemas import TrackData
 from .track_crud import bulk_add_tracks, get_existing_track
+
+logger = logging.getLogger(__name__)
 
 # if we find that functionality in these crud files is being duplicated across multiple models (i.e. we have duplicated get_by_id methods) we can make a BaseCRUD class that all models inherit from
 # TODO: we may want to refactor this into a class at some point
@@ -61,4 +65,4 @@ def add_track_data_to_playlist(sql_session, track_data_list: list[TrackData], pl
                 existing_assoc_keys.add(assoc)
                 playlist_row.playlist_tracks.append(assoc)
         else:
-            print("Error")
+            logger.debug(f"track_data is empty in track_data_list: {track_data_list}")

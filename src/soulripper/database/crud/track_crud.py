@@ -1,7 +1,10 @@
 from sqlalchemy.orm import Session
+import logging
 
 from ..models import Tracks, Artists, TrackArtists
 from ..schemas import TrackData
+
+logger = logging.getLogger(__name__)
 
 # if we find that functionality in these crud files is being duplicated across multiple models (i.e. we have duplicated get_by_id methods) we can make a BaseCRUD class that all models inherit from
 
@@ -20,7 +23,7 @@ def add_track(session: Session, track_data: TrackData):
     existing_track = get_existing_track(session, track_data)
     
     if existing_track:
-        print(f"Track ({track_data.title} - {track_data.artists}) already exists in the database - not adding")
+        logger.info(f"Track ({track_data.title} - {track_data.artists}) already exists in the database - not adding")
         return existing_track
     
     track = Tracks(
@@ -96,7 +99,7 @@ def bulk_add_tracks(session, track_data_list: set[TrackData]):
     session.add_all(new_track_artist_associations)
     session.flush()
 
-    print(f"Inserted {len(new_tracks)} new tracks.")
+    logger.info(f"Inserted {len(new_tracks)} new tracks.")
 
 def search_for_track(sql_session, track_title):
     results = sql_session.query(Tracks).filter(
@@ -123,8 +126,8 @@ def remove_track(sql_session, track_id) -> bool :
     if existing_track:
         sql_session.delete(existing_track)
         sql_session.flush()
-        print("Successfully removed the track")
+        logger.info(f"Successfully removed the track with id: {track_id}")
         return True
     else:
-        print("Could not find the track you were trying to remove")
+        logger.info(f"Could not find the track you were trying to remove, track_id = {track_id}")
         return False

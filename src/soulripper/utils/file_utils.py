@@ -6,6 +6,8 @@ import logging
 from soulripper.database.schemas import TrackData
 from soulripper.utils.app_params import AppParams
 
+logger = logging.getLogger(__name__)
+
 # TODO: look at metadata to see what else we can extract - it's different for each file :( - need to find file with great metadata as example
 def extract_file_metadata(filepath: str) -> TrackData:
     """
@@ -21,7 +23,7 @@ def extract_file_metadata(filepath: str) -> TrackData:
     try:
         file_metadata = mutagen.File(filepath)
     except Exception as e:
-        print(f"Error reading metadata of file {filepath}: {e}")
+        logger.error(f"Error reading metadata of file {filepath}: {e}")
         return None
 
     if file_metadata:

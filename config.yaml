@@ -1,6 +1,6 @@
 # TODO: implement all of the unimplemented fields 
 
-# NOTE: all paths should be absolute
+# NOTE: all paths must be absolute
 
 paths:
   output_path: /home/soulripper/debug/music
@@ -9,9 +9,9 @@ paths:
 
 download_behavior:
   youtube_only: False
-  soulseek_only: False                                      # unimplemented
-  max_retries: 5                                            # unimplemented
-  inactive_download_timeout: 10                             # unimplemented
+  soulseek_only: False                                                # unimplemented
+  max_retries: 5                                                      # unimplemented
+  inactive_download_timeout: 10                                       # unimplemented
 
 audio:
   valid_extensions:
@@ -23,7 +23,7 @@ privacy:
   spotify_scope: "user-library-read user-read-private playlist-read-collaborative playlist-read-private"
 
 debug:
-  log: True                                                 # unimplemented
-  log_level: DEBUG                                          # DEBUG, INFO, WARNING, ERROR, CRITICAL
-  log_filepath: /home/soulripper/debug/log.txt              # unimplemented
+  log: True                                                           # unimplemented
+  log_level: DEBUG                                                    # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  log_filepath: /home/soulripper/debug/log.txt                        # unimplemented
   db_echo: False

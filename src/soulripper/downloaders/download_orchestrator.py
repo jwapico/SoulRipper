@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session
+import logging
 import os
 
 from soulripper.database.models import Tracks, Playlists, Artists, PlaylistTracks, TrackArtists
@@ -8,6 +9,8 @@ from soulripper.database.schemas import TrackData
 
 from soulripper.spotify import SpotifyClient
 from soulripper.downloaders import SoulseekDownloader, download_track_ytdlp
+
+logger = logging.getLogger(__name__)
 
 def download_from_search_query(slskd_client: SoulseekDownloader, search_query: str, output_path: str, youtube_only: bool = False, max_retries: int = 5) -> str:
     """
@@ -109,7 +112,7 @@ def download_playlist_from_spotify_url(slskd_client: SoulseekDownloader, spotify
             new_track_row = add_track(sql_session, track_data)
             track_rows_and_data.append((new_track_row, track_data))
         else:
-            print(f"Track ({track_data.title} - {track_data.artists}) already exists in the database, skipping download.")
+            logger.info(f"Track ({track_data.title} - {track_data.artists}) already exists in the database, skipping download.")
             if existing_track_row.filepath is None:
                 existing_track_row.filepath = download_track(slskd_client, track_data, output_path)
                 sql_session.commit()

@@ -1,5 +1,8 @@
 import subprocess
+import logging
 import re
+
+logger = logging.getLogger(__name__)
 
 # TODO: need to embed metadata into the file after it downloads
 def download_track_ytdlp(search_query: str, output_path: str) -> str :
@@ -18,7 +21,7 @@ def download_track_ytdlp(search_query: str, output_path: str) -> str :
     search_query = f"ytsearch:{search_query}".encode("utf-8").decode()
     ytdlp_output = ""
 
-    print(f"Downloading from yt-dlp: {search_query}")
+    logger.info(f"Downloading from yt-dlp: {search_query}")
 
     # download the file using yt-dlp and necessary flags
     process = subprocess.Popen([
@@ -33,9 +36,9 @@ def download_track_ytdlp(search_query: str, output_path: str) -> str :
         "-o", "%(title)s.%(ext)s"
     ], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 
-    # print and append the output of yt-dlp to the log file
+    # log and save the output since we need to search it for the filepath
     for line in iter(process.stdout.readline, ''):
-        print(line, end='')
+        logger.info(line, end='')
         ytdlp_output += line
 
     process.stdout.close()
