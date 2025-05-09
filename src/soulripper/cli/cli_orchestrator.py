@@ -1,5 +1,10 @@
 import sqlalchemy as sqla
 from sqlalchemy.orm import Session
+from pyventus.events import EventLinker
+from typing import Tuple
+import rich.progress
+import rich.console
+import logging
 import argparse
 import os
 
@@ -8,7 +13,9 @@ from soulripper.database import add_local_library_to_db, add_local_track_to_db
 from soulripper.database import Base
 from soulripper.utils import AppParams
 from soulripper.spotify import SpotifyClient
-from soulripper.downloaders import SoulseekDownloader, download_from_search_query, download_liked_songs, download_playlist_from_spotify_url
+from soulripper.downloaders import SoulseekDownloader, download_from_search_query, download_liked_songs, download_playlist_from_spotify_url, SoulseekDownloadStartEvent, SoulseekDownloadUpdateEvent, SoulseekDownloadEndEvent
+
+logger = logging.getLogger(__name__)
 
 # TODO: Implement event bus
 #   - https://github.com/mdapena/pyventus
@@ -20,6 +27,12 @@ class CLIOrchestrator():
         self.db_engine=db_engine
         self.soulseek_downloader = soulseek_downloader
         self.app_params = app_params
+
+        self._rich_console = rich.console.Console()
+        self._soulseek_downloads = {str: Tuple[rich.progress.TaskID, rich.progress.Progress]}
+        EventLinker.on(SoulseekDownloadStartEvent)(self._on_soulseek_download_start)
+        EventLinker.on(SoulseekDownloadUpdateEvent)(self._on_soulseek_download_update)
+        EventLinker.on(SoulseekDownloadEndEvent)(self._on_soulseek_download_end)
 
     def run(self):
         args = self.parse_cmdline_args()
@@ -94,3 +107,48 @@ class CLIOrchestrator():
         self.app_params.youtube_only = args.yt if args.yt else self.app_params.youtube_only
         
         return args
+    
+    def _on_soulseek_download_start(self, download_start_event: SoulseekDownloadStartEvent):
+        # there prolly many more hidden bugs when it comes to wacky filenames
+        safe_filename = download_start_event.download_filename.replace("{", "[").replace("}", "]")
+
+        # this is just style config
+        rich_console = rich.progress.Console()
+        rich_progress = rich.progress.Progress(
+            rich.progress.TextColumn(f"[light_steel_blue]Downloading:[/light_steel_blue] [bright_white]{safe_filename}"),
+            rich.progress.BarColumn(
+                bar_width=None,
+                complete_style="green",
+                finished_style="green",
+                pulse_style="deep_pink4",
+                style="deep_pink4"
+            ),
+            rich.progress.TaskProgressColumn(style="green"),
+            rich.progress.TimeRemainingColumn(),
+            expand=True,
+            console=rich_console
+        )
+
+        # start the progress bar, add a task, and append them to the soulseek_downloads array
+        rich_progress.start()
+        task_id = rich_progress.add_task("Downloading track from Soulseek", total=100)
+        self._soulseek_downloads[download_start_event.download_file_id] = (task_id, rich_progress)
+
+    def _on_soulseek_download_update(self, download_update_event: SoulseekDownloadUpdateEvent):
+        task_id, rich_progress = self._soulseek_downloads.get(download_update_event.download_file_id, (None, None))
+
+        if rich_progress is not None and task_id is not None:
+            percent_complete = round(download_update_event.percent_complete, 2)
+            rich_progress.update(task_id, completed=percent_complete)
+        else:
+            logger.warning(f"Could not find the Soulseek download you were looking for, task_id={task_id}, rich_progress={rich_progress}")
+
+    def _on_soulseek_download_end(self, download_end_event: SoulseekDownloadEndEvent):
+        task_id, rich_progress = self._soulseek_downloads.pop(download_end_event.download_file_id, (None, None))
+
+        if rich_progress and task_id:
+            if download_end_event.end_state == "Completed, Succeeded":
+                rich_progress.update(task_id, 100)
+                rich_progress.stop()
+            else:
+                rich_progress.stop()

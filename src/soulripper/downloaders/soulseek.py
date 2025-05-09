@@ -1,17 +1,21 @@
 import slskd_api
 from rich.console import Console
 from rich.progress import Progress, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn
+from pyventus.events import AsyncIOEventEmitter
 import logging
 import shutil
 import time
 import os
 import re
 
+from .events import SoulseekDownloadStartEvent, SoulseekDownloadUpdateEvent, SoulseekDownloadEndEvent
+
 logger = logging.getLogger(__name__)
 
 class SoulseekDownloader:
     def __init__(self, api_key: str):
         self.client = slskd_api.SlskdClient("http://slskd:5030", api_key)
+        self.event_emitter = AsyncIOEventEmitter(debug=False)
 
     # TODO: the output filename is wrong also ERROR HANDLING
     def download_track(self, search_query: str, output_path: str, max_retries: int = 5, inactive_download_timeout: int = 10) -> str:       
@@ -35,81 +39,78 @@ class SoulseekDownloader:
             return None
         
         # attempt to start the download
-        download_file_id, download_filepath, download_username = self.start_download(search_results, max_retries)
-        if None in (download_file_id, download_filepath, download_username):
-            logger.info(f"None field returned by attempt_downloads, cannot continue: {(download_file_id, download_filepath, download_username)}")
+        download_file_id, download_filepath, download_user = self.start_download(search_results, max_retries)
+        if None in (download_file_id, download_filepath, download_user):
+            logger.info(f"None field returned by attempt_downloads, cannot continue: {(download_file_id, download_filepath, download_user)}")
             return None
 
-        # there prolly many more hidden bugs when it comes to wacky filenames
         download_filename = re.split(r'[\\/]', download_filepath)[-1]
-        safe_filename = download_filename.replace("{", "[").replace("}", "]")
 
-        # this is just style config for the rich progress bar
-        rich_console = Console()
-        rich_progress_bar = Progress(
-            TextColumn(f"[light_steel_blue]Downloading:[/light_steel_blue] [bright_white]{safe_filename}"),
-            BarColumn(
-                bar_width=None,
-                complete_style="green",
-                finished_style="green",
-                pulse_style="deep_pink4",
-                style="deep_pink4"
-            ),
-            TaskProgressColumn(style="green"),
-            TimeRemainingColumn(),
-            expand=True,
-            console=rich_console
-        )     
+        # now that we are confident the download started successfully, emit a SoulseekDownloadStartEvent
+        self.event_emitter.emit(
+            event=SoulseekDownloadStartEvent(
+                download_file_id=download_file_id,
+                download_filename=download_filename,
+                download_user=download_user
+            )
+        )
 
-        # this scope is just for the rich progress bar idk exactly how it works 
-        with rich_progress_bar as rich_progress:
-            task = rich_progress.add_task("Downloading", total=100)
+        # continuously check on the download while it is incomplete, update the progress bar, and break if it takes too long or an exception occurs
+        start_time = time.time()
+        percent_complete = 0.0
+        slskd_download = None
+        while percent_complete < 100:
+            # update the download, progress bar, and timer
+            elapsed_time = time.time() - start_time
+            slskd_download = self.client.transfers.get_download(download_user, download_file_id)
+            percent_complete = slskd_download["percentComplete"]
+            self.event_emitter.emit(
+                event=SoulseekDownloadUpdateEvent(
+                    download_file_id=download_file_id,
+                    percent_complete=percent_complete
+                )
+            )
 
-            # continuously check on the download while it is incomplete, update the progress bar, and break if it takes too long or an exception occurs
-            start_time = time.time()
-            percent_complete = 0.0
-            slskd_download = None
-            while percent_complete < 100:
-                # update the download, progress bar, and timer
-                slskd_download = self.client.transfers.get_download(download_username, download_file_id)
-                percent_complete = round(slskd_download["percentComplete"], 2)
-                rich_progress.update(task, completed=percent_complete)
-                elapsed_time = time.time() - start_time
+            # if the download has taken longer than the timeout time AND the download is still at 0%, give up and break
+            # TODO: we prolly need a better way of doing this, what if the download goes stale at 50%? i think there is way to look at transfer rates
+            if elapsed_time > inactive_download_timeout * 60 and percent_complete == 0.0:
+                logging.info(f'Download was inactive for {inactive_download_timeout} minutes, skipping')
+                break
 
-                # if the download has taken longer than the timeout time AND the download is still at 0%, give up and break
-                # TODO: we prolly need a better way of doing this, what if the download goes stale at 50%? i think there is way to look at transfer rates
-                if elapsed_time > inactive_download_timeout * 60 and percent_complete == 0.0:
-                    logging.info(f'Download was inactive for {inactive_download_timeout} minutes, skipping')
-                    break
+            # if something goes wrong on slskd's end an 'exception' field appears in the download - this is bad so we break if this happens
+            if "exception" in slskd_download.keys():
+                logging.info(f'Exception occured in the soulseek download: {slskd_download["exception"]}')
+                break
 
-                # if something goes wrong on slskd's end an 'exception' field appears in the download - this is bad so we break if this happens
-                if "exception" in slskd_download.keys():
-                    logging.info(f'Exception occured in the soulseek download: {slskd_download["exception"]}')
-                    break
-
-                time.sleep(.1)
+            time.sleep(.1)
     
         # move the file from where it was downloaded to the specified output path
         if slskd_download["state"] == "Completed, Succeeded":
             # by default slskd places downloads in assets/downloads/<containing folder name of file from user>/<file from user>
             containing_dir_name = os.path.basename(os.path.dirname(download_filepath.replace("\\", "/")))
-            # TODO: we prolly should not be hard coding these paths - it may be fine bc docker but idk if we want to use docker long term
             source_path = os.path.join(f"/home/soulripper/assets/downloads/{containing_dir_name}/{download_filename}")
-            dest_path = os.path.join(f"{output_path}/{download_filename}")
+            final_filepath = os.path.join(f"{output_path}/{download_filename}")
 
             if not os.path.exists(source_path):
                 logger.error(f"SLSKD download state is 'Completed, Succeeded' but the file was not found: {source_path}")
                 return None
+            
 
-            shutil.move(source_path, dest_path)
-            return dest_path
+            shutil.move(source_path, final_filepath)
+            return final_filepath
         else:
             logger.info(f"Download failed: {slskd_download['state']}")
 
             if slskd_download['state'] == "InProgress":
-                raise Exception("DEBUG: Something sus has occured, download got to 100 but state is still InProgress")
+                logger.critical(f"Something very sus has occured, download got to 100 but state is still InProgress. Full slskd_download data: {slskd_download}")
 
-            return None
+        self.event_emitter.emit(
+            event=SoulseekDownloadEndEvent(
+                download_file_id=download_file_id,
+                end_state=slskd_download["state"],
+                final_filepath=final_filepath
+            )
+        )
     
     def start_download(self, search_results, max_retries):
         # attempt to download the each best search result until we reach max_retries or we run out of search_results
@@ -121,7 +122,7 @@ class SoulseekDownloader:
             try:
                 self.client.transfers.enqueue(file_user, [file_data])
             except Exception as e:
-                logger.error(f"Error during transfer: {e}")
+                logger.info(f"Slskd error during transfer: {e}")
                 continue
 
             filename = file_data["filename"]

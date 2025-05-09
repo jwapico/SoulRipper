@@ -16,3 +16,5 @@ def init_logger(log_filepath: str, log_level: int, db_echo: bool, silence_other_
     if silence_other_packages:
         logging.getLogger("spotipy").setLevel(logging.WARNING)
         logging.getLogger("urllib3").setLevel(logging.WARNING)
+        logging.getLogger("pyventus").setLevel(logging.WARNING)
+        logging.getLogger("asyncio").setLevel(logging.WARNING)
