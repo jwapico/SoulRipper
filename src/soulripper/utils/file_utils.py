@@ -1,6 +1,7 @@
 import mutagen
 import yaml
 import json
+import logging
 
 from soulripper.database.schemas import TrackData
 from soulripper.utils.app_params import AppParams
@@ -52,7 +53,7 @@ def extract_app_params(config_filepath: str) -> AppParams:
         raise Exception("Error reading the config file: config is None")
 
     OUTPUT_PATH = config["paths"]["output_path"]
-    DATABASE_PATH = config["paths"]["database_path"]
+    DATABASE_PATH = config.get("paths", {}).get("database_path", "/home/soulripper/assets/soul.db")
     SOULSEEK_ONLY = config.get("download_behavior", {}).get("soulseek_only", False)
     YOUTUBE_ONLY = config.get("download_behavior", {}).get("youtube_only", False)
     YOUTUBE_COOKIE_FILEPATH = config.get("paths", {}).get("youtube_cookie_filepath", None)
@@ -63,6 +64,19 @@ def extract_app_params(config_filepath: str) -> AppParams:
     LOG_FILEPATH = config.get("debug", {}).get("log_filepath", "/home/soulripper/debug/log.txt")
     DB_ECHO = config.get("debug", {}).get("db_echo", False)
     EXTENSIONS = config.get("audio", {}).get("valid_extensions", [".mp3", ".flac", ".wav"])
+    LOG_LEVEL_STR = config.get("debug", {}).get("log_level", "INFO")
+
+    match LOG_LEVEL_STR:
+        case "DEBUG":
+            LOG_LEVEL = logging.DEBUG
+        case "INFO":
+            LOG_LEVEL = logging.INFO
+        case "WARNING":
+            LOG_LEVEL = logging.WARNING
+        case "ERROR":
+            LOG_LEVEL = logging.ERROR
+        case "CRITICAL":
+            LOG_LEVEL = logging.CRITICAL
 
     return AppParams(
         output_path=OUTPUT_PATH,
@@ -74,7 +88,8 @@ def extract_app_params(config_filepath: str) -> AppParams:
         inactive_download_timeout=INACTIVE_DOWNLOAD_TIMEOUT,
         spotify_scope=SPOTIFY_SCOPE,
         log_enabled=LOG_ENABLED,
+        log_level=LOG_LEVEL,
         log_filepath=LOG_FILEPATH,
         db_echo=DB_ECHO,
-        valid_music_extensions=EXTENSIONS
+        valid_music_extensions=EXTENSIONS,
     )

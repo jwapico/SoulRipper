@@ -23,6 +23,7 @@ privacy:
   spotify_scope: "user-library-read user-read-private playlist-read-collaborative playlist-read-private"
 
 debug:
-  log: False                                                # unimplemented
+  log: True                                                 # unimplemented
+  log_level: DEBUG                                          # DEBUG, INFO, WARNING, ERROR, CRITICAL
   log_filepath: /home/soulripper/debug/log.txt              # unimplemented
   db_echo: False
