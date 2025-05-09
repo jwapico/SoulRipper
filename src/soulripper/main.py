@@ -3,7 +3,6 @@ import sqlalchemy as sqla
 import sys
 import os
 import dotenv
-import logging
 
 from soulripper.database import Base
 from soulripper.downloaders import SoulseekDownloader
