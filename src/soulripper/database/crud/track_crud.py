@@ -23,7 +23,6 @@ def add_track(session: Session, track_data: TrackData):
     existing_track = get_existing_track(session, track_data)
     
     if existing_track:
-        logger.info(f"Track ({track_data.title} - {track_data.artists}) already exists in the database - not adding")
         return existing_track
     
     track = Tracks(

@@ -31,8 +31,6 @@ def add_local_library_to_db(sql_session, music_dir: str, valid_extensions: List[
                 existing_track = get_existing_track(sql_session, TrackData(filepath=filepath))
                 if existing_track is None:
                     add_local_track_to_db(sql_session, filepath)
-                else:
-                    logger.info(f"track with filepath: {filepath} already found in database, skipping")
 
 def add_local_track_to_db(sql_session, filepath: str):
     if not os.path.exists(filepath):
