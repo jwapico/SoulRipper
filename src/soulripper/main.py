@@ -15,8 +15,6 @@ def main():
     app_params: AppParams = extract_app_params("/home/soulripper/config.yaml")
 
     init_logger(app_params.log_filepath, app_params.log_level, app_params.db_echo)
-    logging.getLogger("spotipy").setLevel(logging.WARNING)
-    logging.getLogger("urllib3").setLevel(logging.WARNING)
 
     # initialize the spotify client from the users api keys and config
     dotenv.load_dotenv()   
