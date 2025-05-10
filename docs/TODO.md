@@ -38,7 +38,7 @@ TODO's (~ roughly in order of importance):
           - https://docs.flutter.dev/get-started/codelab
           - https://docs.flutter.dev/get-started/install/linux/web
           - we should make sure we have the back end right before we start on the front end
-  - TODO.md file for project management and big plans
+  - cache spotify api data so we dont have to retreive ALL of it every time
       - talk to colton eoghan and other potential users about high level design
   - youtube playlist functionality
       - https://developers.google.com/youtube/v3/docs/playlists/list

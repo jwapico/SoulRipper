@@ -12,6 +12,7 @@ class SoulseekDownloadStartEvent:
 @dataclass
 class SoulseekDownloadUpdateEvent:
     download_file_id: str
+    download_filename: str
     percent_complete: float
 
 @dataclass

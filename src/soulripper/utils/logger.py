@@ -1,4 +1,5 @@
 import logging
+import sys
 
 def init_logger(log_filepath: str, log_level: int, db_echo: bool, silence_other_packages: bool = True):
     logging.basicConfig(
@@ -18,3 +19,7 @@ def init_logger(log_filepath: str, log_level: int, db_echo: bool, silence_other_
         logging.getLogger("urllib3").setLevel(logging.WARNING)
         logging.getLogger("pyventus").setLevel(logging.WARNING)
         logging.getLogger("asyncio").setLevel(logging.WARNING)
+
+    # send logs to stderr, this is to keep stdout clean for our cli printing logic
+    handler = logging.StreamHandler(sys.stderr)
+    logging.getLogger(__name__).handlers[:] = [handler]

@@ -1,22 +1,11 @@
-import rich.progress
 import sqlalchemy as sqla
 from sqlalchemy.orm import Session
 from pyventus.events import EventLinker
-from typing import Dict
 import logging
+import asyncio
 import argparse
+import sys
 import os
-
-import rich
-from rich.console import Console
-from rich.progress import (
-    Progress,
-    SpinnerColumn,
-    BarColumn,
-    TextColumn,
-    TaskProgressColumn,
-    TimeRemainingColumn,
-)
 
 from soulripper.database import update_db_with_spotify_playlist
 from soulripper.database import add_local_library_to_db, add_local_track_to_db
@@ -46,9 +35,10 @@ class CLIOrchestrator():
         self._soulseek_downloader = soulseek_downloader
         self._app_params = app_params
 
-        # dicts that keep track of download and search tasks for rich - they map the download file id and search id from soulseek to task id
-        self._download_tasks: Dict[str, rich.progress.TaskID]  = {}
-        self._search_tasks: Dict[str, rich.progress.TaskID] = {}
+        self._event_loop = asyncio.AbstractEventLoop
+        self._spinner_task = None
+        self._spinner_running = False
+        self._num_found_files: int
 
         # attach download event listeners
         EventLinker.on(SoulseekDownloadStartEvent)(self._on_soulseek_download_start)
@@ -60,36 +50,11 @@ class CLIOrchestrator():
         EventLinker.on(SoulseekSearchUpdateEvent)(self._on_soulseek_search_update)
         EventLinker.on(SoulseekSearchEndEvent)(self._on_soulseek_search_end)
 
-        # style config for rich
-        self._console = Console()
-        self._progress = Progress(
-            SpinnerColumn(spinner_name="earth"),
-            TextColumn("{task.description}"),
-            BarColumn(
-                bar_width=None,
-                complete_style="green",
-                finished_style="green",
-                pulse_style="deep_pink4",
-                style="deep_pink4"
-            ),
-            TaskProgressColumn(style="green"),
-            TimeRemainingColumn(),
-            console=self._console,
-            refresh_per_second=10,
-            expand=True
-        )
-
     def run(self):
-        self._progress.start()
+        """Spins up a new asyncio coroutine that manages the CLI"""
 
         args = self.parse_cmdline_args()
-
-        SEARCH_QUERY = args.search_query
-        SPOTIFY_PLAYLIST_URL = args.playlist_url
-        DOWNLOAD_LIKED = args.download_liked
-        DOWNLOAD_ALL_PLAYLISTS = args.download_all_playlists
         DROP_DATABASE = args.drop_database
-        NEW_TRACK_FILEPATH = args.add_track
 
         # if the flag was provided drop everything in the database
         if DROP_DATABASE:
@@ -102,36 +67,88 @@ class CLIOrchestrator():
         # initialize the tables defined in souldb.py
         Base.metadata.create_all(self._db_engine)
 
-        # populate the database with metadata found from files in the users output directory
+        # TODO: experiment with this in and out of async function to see if things are dramatically faster inside
         add_local_library_to_db(self._sql_session, self._app_params.output_path, self._app_params.valid_music_extensions)
 
+        # now enter our main logic from an async function
+        asyncio.run(self.async_run(args=args))
+
+    async def async_run(self, args: argparse.Namespace):
+        # connect the downloader to the event loop - TODO: i think this will be unnecessary once we refactor everything to use async
+        self._event_loop = asyncio.get_event_loop()
+        self._soulseek_downloader.event_loop = self._event_loop
+
+        SEARCH_QUERY = args.search_query
+        SPOTIFY_PLAYLIST_URL = args.playlist_url
+        DOWNLOAD_LIKED = args.download_liked
+        DOWNLOAD_ALL_PLAYLISTS = args.download_all_playlists
+        NEW_TRACK_FILEPATH = args.add_track
+
+        # populate the database with metadata found from files in the users output directory
+
         if NEW_TRACK_FILEPATH:
-            add_local_track_to_db(self._sql_session, NEW_TRACK_FILEPATH)
+            await asyncio.to_thread(add_local_track_to_db, self._sql_session, NEW_TRACK_FILEPATH)
 
         # if a search query is provided, download the track
         if SEARCH_QUERY:
-            output_path = download_from_search_query(self._soulseek_downloader, SEARCH_QUERY, self._app_params.output_path, self._app_params.youtube_only, self._app_params.youtube_only)
+            output_path = await asyncio.to_thread(download_from_search_query, self._soulseek_downloader, SEARCH_QUERY, self._app_params.output_path, self._app_params.youtube_only, self._app_params.max_download_retries)
             # TODO: get metadata and insert into database
 
         # get all playlists from spotify and add them to the database
         if DOWNLOAD_ALL_PLAYLISTS:
-            all_playlists_metadata = self._spotify_client.get_all_playlists()
+            all_playlists_metadata = await asyncio.to_thread(self._spotify_client.get_all_playlists)
             for playlist_metadata in all_playlists_metadata:
-                update_db_with_spotify_playlist(self._sql_session, self._spotify_client, playlist_metadata)
+                await asyncio.to_thread(update_db_with_spotify_playlist, self._sql_session, self._spotify_client, playlist_metadata)
 
             # TODO: actually download the playlists
 
         # if the update liked flag is provided, download all liked songs from spotify
         if DOWNLOAD_LIKED:
-            download_liked_songs(self._soulseek_downloader, self._spotify_client, self._sql_session, self._app_params.output_path, self._app_params.youtube_only)
+            await asyncio.to_thread(download_liked_songs, self._soulseek_downloader, self._spotify_client, self._sql_session, self._app_params.output_path, self._app_params.youtube_only)
         
         # if a playlist url is provided, download the playlist
         # TODO: refactor this function
         if SPOTIFY_PLAYLIST_URL:
-            download_playlist_from_spotify_url(self._soulseek_downloader, self._spotify_client, self._sql_session, SPOTIFY_PLAYLIST_URL, self._app_params.output_path)
-            pass
+            await asyncio.to_thread(download_playlist_from_spotify_url, self._soulseek_downloader, self._spotify_client, self._sql_session, SPOTIFY_PLAYLIST_URL, self._app_params.output_path)
 
-        self._progress.stop()
+    async def _on_soulseek_search_start(self, event: SoulseekSearchStartEvent):
+        self.update_last_line(f"Searching Soulseek for: '{event.search_query}'")
+        self._num_found_files = 0
+        self._spinner_running = True
+        self._spinner_task = asyncio.create_task(self._spinnup_spinner(event=event))
+
+    async def _on_soulseek_search_update(self, event: SoulseekSearchUpdateEvent):
+        self._num_found_files = event.num_found_files
+
+    async def _on_soulseek_search_end(self, event: SoulseekSearchEndEvent):
+        self._spinner_running = False
+        if self._spinner_task:
+            await self._spinner_task
+
+        self.update_last_line(f"🌐 Soulseek search finished. Query: {event.search_query} | Relevant files found: {event.num_relevant_files}\n")
+
+    async def _on_soulseek_download_start(self, event: SoulseekDownloadStartEvent):
+        self.update_last_line(f"Soulseek download started, filename: {event.download_filename}, user: {event.download_user}")
+
+    async def _on_soulseek_download_update(self, event: SoulseekDownloadUpdateEvent):
+        self.update_last_line(f"Soulseek download updated, filename: {event.download_filename} | percent downloaded: {round(event.percent_complete, 2)}")
+
+    async def _on_soulseek_download_end(self, event: SoulseekDownloadEndEvent):
+        self.update_last_line(f"Soulseek download finished, filepath: {event.final_filepath}, state: {event.end_state}\n\n")
+
+    async def _spinnup_spinner(self, event: SoulseekSearchStartEvent):
+        update_counter = 0
+        spinner_frames = ['🌍', '🌏','🌎']
+        while self._spinner_running:
+            frame = spinner_frames[update_counter % len(spinner_frames)]
+            self.update_last_line(f"{frame} Searching Soulseek for: '{event.search_query}' | Total files found: {self._num_found_files}")
+            update_counter += 1
+            await asyncio.sleep(0.25)
+
+    def update_last_line(self, new_line: str) -> None : 
+        """moves the cursor up one line to replace the previous line printed with new_line"""
+        sys.stdout.write("\r\x1b[2K" + new_line)
+        sys.stdout.flush()  
 
     def parse_cmdline_args(self) -> argparse.Namespace:
         # add all the arguments
@@ -156,21 +173,3 @@ class CLIOrchestrator():
         self._app_params.youtube_only = args.yt if args.yt else self._app_params.youtube_only
         
         return args
-    
-    async def _on_soulseek_download_start(self, event: SoulseekDownloadStartEvent):
-        logger.info(f"Soulseek download started, id: {event.download_file_id}, filename: {event.download_filename}, user: {event.download_user}")
-
-    async def _on_soulseek_download_update(self, event: SoulseekDownloadUpdateEvent):
-        logger.info(f"Soulseek download updated, id: {event.download_file_id}, percent: {event.percent_complete}")
-
-    async def _on_soulseek_download_end(self, event: SoulseekDownloadEndEvent):
-        logger.info(f"Soulseek download completed, id: {event.download_file_id}, filepath: {event.final_filepath}, state: {event.end_state}")
-
-    async def _on_soulseek_search_start(self, event: SoulseekSearchStartEvent):
-        logger.info(f"Soulseek search started, id: {event.search_id}, query: {event.search_query}")
-
-    async def _on_soulseek_search_update(self, event: SoulseekSearchUpdateEvent):
-        logger.info(f"Soulseek search updated, id: {event.search_id}, query: {event.search_query}, number of files found: {event.num_found_files}")
-
-    async def _on_soulseek_search_end(self, event: SoulseekSearchEndEvent):
-        logger.info(f"Soulseek search ended, id: {event.search_id}, query: {event.search_query}, total relevant files found: {event.num_relevant_files}")
