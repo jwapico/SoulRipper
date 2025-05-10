@@ -1,13 +1,6 @@
-import rich.layout
-import rich.status
 import sqlalchemy as sqla
 from sqlalchemy.orm import Session
 from pyventus.events import EventLinker
-from typing import Dict
-import threading
-import rich.progress
-from rich.live import Live
-import rich.console
 import logging
 import argparse
 import os
@@ -32,9 +25,6 @@ from soulripper.downloaders import (
 
 logger = logging.getLogger(__name__)
 
-# TODO: Implement event bus
-#   - https://github.com/mdapena/pyventus
-
 class CLIOrchestrator():
     def __init__(self, spotify_client: SpotifyClient, sql_session: Session, db_engine: sqla.Engine, soulseek_downloader: SoulseekDownloader, app_params: AppParams = None):
         self.spotify_client = spotify_client
@@ -52,29 +42,6 @@ class CLIOrchestrator():
         EventLinker.on(SoulseekSearchStartEvent)(self._on_soulseek_search_start)
         EventLinker.on(SoulseekSearchUpdateEvent)(self._on_soulseek_search_update)
         EventLinker.on(SoulseekSearchEndEvent)(self._on_soulseek_search_end)
-
-        # TODO: fix this bullshit FUCK
-        self._rich_console = rich.console.Console()
-        self._rich_progress = rich.progress.Progress(
-            rich.progress.SpinnerColumn(spinner_name="earth"),
-            rich.progress.TextColumn("{task.description}"),
-            rich.progress.BarColumn(
-                bar_width=None,
-                complete_style="green",
-                finished_style="green",
-                pulse_style="deep_pink4",
-                style="deep_pink4"
-            ),
-            rich.progress.TaskProgressColumn(style="green"),
-            rich.progress.TimeRemainingColumn(),
-            expand=True,
-            console=self._rich_console,
-            refresh_per_second=10,
-        )
-        self._rich_progress.start()
-
-        self._soulseek_downloads: Dict[str, rich.progress.TaskID] = {}
-        self._search_task_id: rich.progress.TaskID = None
 
     def run(self):
         args = self.parse_cmdline_args()
@@ -150,39 +117,20 @@ class CLIOrchestrator():
         
         return args
     
-    # TODO: FIX ALA DEE HOE
-    # FUCK
-
     def _on_soulseek_download_start(self, download_start_event: SoulseekDownloadStartEvent):
-        tid = self._rich_progress.add_task(f"Downloading {download_start_event.download_filename}", total=100)
-        self._soulseek_downloads[download_start_event.download_file_id] = tid
+        pass
 
     def _on_soulseek_download_update(self, download_update_event: SoulseekDownloadUpdateEvent):
-        tid = self._soulseek_downloads.get(download_update_event.download_file_id)
-        if tid is not None:
-            self._rich_progress.update(tid, completed=download_update_event.percent_complete)
-
+        pass
 
     def _on_soulseek_download_end(self, download_end_event: SoulseekDownloadEndEvent):
-        tid = self._soulseek_downloads.pop(download_end_event.download_file_id, None)
-        if tid is not None:
-            self._rich_progress.update(tid, completed=100)
-            self._rich_progress.remove_task(tid)
+        pass
 
     def _on_soulseek_search_start(self, search_start: SoulseekSearchStartEvent):
-        self._search_task_id = self._rich_progress.add_task(
-            f"Searching SoulSeek for: {search_start.search_query}", total=None
-        )
+        pass
 
     def _on_soulseek_search_update(self, search_update: SoulseekSearchUpdateEvent):
-        self._rich_progress.update(
-            self._search_task_id,
-            description=f"Found {search_update.num_found_files} files for: {search_update.search_query}"
-        )
+        pass
 
     def _on_soulseek_search_end(self, search_end: SoulseekSearchEndEvent):
-        self._rich_progress.update(self._search_task_id, description=f"Search complete: {search_end.search_query}")
-        self._rich_progress.remove_task(self._search_task_id)
-        self._search_task_id = None
-
-        self._rich_console.print(f"[green]✔ Found {search_end.num_relevant_files} relevant files for {search_end.search_query}[/]")
+        pass

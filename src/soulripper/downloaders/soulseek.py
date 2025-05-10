@@ -191,7 +191,7 @@ class SoulseekDownloader:
             event=SoulseekSearchEndEvent(
                 search_id=search_id,
                 search_query=search_query,
-                num_relevant_files=total_found_files
+                num_relevant_files=len(relevant_results) if relevant_results else 0
             )
         )
 
