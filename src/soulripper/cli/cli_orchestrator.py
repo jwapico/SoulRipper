@@ -158,47 +158,19 @@ class CLIOrchestrator():
         return args
     
     async def _on_soulseek_download_start(self, event: SoulseekDownloadStartEvent):
-        """Create a new progress bar for this download."""
-        task_id = self._progress.add_task(
-            description=f"[light_steel_blue]Downloading:[/light_steel_blue] [bright_white]{event.download_filename}[/bright_white]",
-            total=100.0,
-        )
-        self._download_tasks[event.download_file_id] = task_id
+        logger.info(f"Soulseek download started, id: {event.download_file_id}, filename: {event.download_filename}, user: {event.download_user}")
 
     async def _on_soulseek_download_update(self, event: SoulseekDownloadUpdateEvent):
-        """Advance the download bar to the new percent complete."""
-        task_id = self._download_tasks.get(event.download_file_id)
-        if task_id is not None:
-            self._progress.update(task_id, completed=event.percent_complete)
+        logger.info(f"Soulseek download updated, id: {event.download_file_id}, percent: {event.percent_complete}")
 
     async def _on_soulseek_download_end(self, event: SoulseekDownloadEndEvent):
-        """Finalize and remove the download bar."""
-        task_id = self._download_tasks.pop(event.download_file_id, None)
-        if task_id is not None:
-            self._progress.update(task_id, completed=100.0)
-            # self._progress.remove_task(task_id)
+        logger.info(f"Soulseek download completed, id: {event.download_file_id}, filepath: {event.final_filepath}, state: {event.end_state}")
 
     async def _on_soulseek_search_start(self, event: SoulseekSearchStartEvent):
-        """Create an indeterminate spinner for the search."""
-        task_id = self._progress.add_task(
-            description=f"[light_steel_blue]Searching Soulseek for:[/light_steel_blue] [bright_white]“{event.search_query}”[/bright_white]",
-            total=None,
-        )
-        self._search_tasks[event.search_id] = task_id
+        logger.info(f"Soulseek search started, id: {event.search_id}, query: {event.search_query}")
 
     async def _on_soulseek_search_update(self, event: SoulseekSearchUpdateEvent):
-        """Update the search spinner’s description with count so far."""
-        task_id = self._search_tasks.get(event.search_id)
-        if task_id is not None:
-            self._progress.update(
-                task_id,
-                description=f"[light_steel_blue]Searching Soulseek for:[/light_steel_blue] [bright_white]“{event.search_query}”[/bright_white] [light_steel_blue]Found[/light_steel_blue] [bright_white]{event.num_found_files}[/bright_white] [light_steel_blue]files[/light_steel_blue]",
-            )
+        logger.info(f"Soulseek search updated, id: {event.search_id}, query: {event.search_query}, number of files found: {event.num_found_files}")
 
     async def _on_soulseek_search_end(self, event: SoulseekSearchEndEvent):
-        """Remove the search spinner when complete."""
-        task_id = self._search_tasks.pop(event.search_id, None)
-        if task_id is not None:
-            self._progress.remove_task(task_id)
-
-        self._console.print(f"[light_steel_blue]Finished Soulseek search for: [/light_steel_blue][bright_white]“{event.search_query}”[/bright_white] [light_steel_blue]Found[/light_steel_blue] [bright_white]{event.num_relevant_files}[/bright_white] [light_steel_blue]files[/light_steel_blue]")
+        logger.info(f"Soulseek search ended, id: {event.search_id}, query: {event.search_query}, total relevant files found: {event.num_relevant_files}")
