@@ -43,10 +43,12 @@ class CLIOrchestrator():
         self.soulseek_downloader = soulseek_downloader
         self.app_params = app_params
 
+        # attach download event listeners
         EventLinker.on(SoulseekDownloadStartEvent)(self._on_soulseek_download_start)
         EventLinker.on(SoulseekDownloadUpdateEvent)(self._on_soulseek_download_update)
         EventLinker.on(SoulseekDownloadEndEvent)(self._on_soulseek_download_end)
 
+        # attach search event listeners
         EventLinker.on(SoulseekSearchStartEvent)(self._on_soulseek_search_start)
         EventLinker.on(SoulseekSearchUpdateEvent)(self._on_soulseek_search_update)
         EventLinker.on(SoulseekSearchEndEvent)(self._on_soulseek_search_end)
