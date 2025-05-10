@@ -1,21 +1,25 @@
 import slskd_api
-from rich.console import Console
-from rich.progress import Progress, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn
-from pyventus.events import AsyncIOEventEmitter
 import logging
 import shutil
 import time
 import os
 import re
 
-from .events import SoulseekDownloadStartEvent, SoulseekDownloadUpdateEvent, SoulseekDownloadEndEvent
+from .events import (
+    SoulseekDownloadStartEvent, 
+    SoulseekDownloadUpdateEvent, 
+    SoulseekDownloadEndEvent, 
+    SoulseekSearchStartEvent, 
+    SoulseekSearchUpdateEvent, 
+    SoulseekSearchEndEvent,
+    event_bus
+)
 
 logger = logging.getLogger(__name__)
 
 class SoulseekDownloader:
     def __init__(self, api_key: str):
         self.client = slskd_api.SlskdClient("http://slskd:5030", api_key)
-        self.event_emitter = AsyncIOEventEmitter(debug=False)
 
     # TODO: the output filename is wrong also ERROR HANDLING
     def download_track(self, search_query: str, output_path: str, max_retries: int = 5, inactive_download_timeout: int = 10) -> str:       
@@ -47,7 +51,7 @@ class SoulseekDownloader:
         download_filename = re.split(r'[\\/]', download_filepath)[-1]
 
         # now that we are confident the download started successfully, emit a SoulseekDownloadStartEvent
-        self.event_emitter.emit(
+        event_bus.emit(
             event=SoulseekDownloadStartEvent(
                 download_file_id=download_file_id,
                 download_filename=download_filename,
@@ -55,16 +59,16 @@ class SoulseekDownloader:
             )
         )
 
-        # continuously check on the download while it is incomplete, update the progress bar, and break if it takes too long or an exception occurs
+        # continuously check on the download while it is incomplete and break if it takes too long or an exception occurs
         start_time = time.time()
         percent_complete = 0.0
         slskd_download = None
         while percent_complete < 100:
-            # update the download, progress bar, and timer
             elapsed_time = time.time() - start_time
             slskd_download = self.client.transfers.get_download(download_user, download_file_id)
             percent_complete = slskd_download["percentComplete"]
-            self.event_emitter.emit(
+
+            event_bus.emit(
                 event=SoulseekDownloadUpdateEvent(
                     download_file_id=download_file_id,
                     percent_complete=percent_complete
@@ -95,16 +99,16 @@ class SoulseekDownloader:
                 logger.error(f"SLSKD download state is 'Completed, Succeeded' but the file was not found: {source_path}")
                 return None
             
-
             shutil.move(source_path, final_filepath)
             return final_filepath
         else:
             logger.info(f"Download failed: {slskd_download['state']}")
+            final_filepath = None
 
             if slskd_download['state'] == "InProgress":
                 logger.critical(f"Something very sus has occured, download got to 100 but state is still InProgress. Full slskd_download data: {slskd_download}")
 
-        self.event_emitter.emit(
+        event_bus.emit(
             event=SoulseekDownloadEndEvent(
                 download_file_id=download_file_id,
                 end_state=slskd_download["state"],
@@ -142,32 +146,55 @@ class SoulseekDownloader:
         Returns:
             list: a list of relevant search results
         """
+        # start the slskd search and extract the id
         search = self.client.searches.search_text(search_query)
         search_id = search["id"]
 
-        rich_console = Console()
+        # emit a search start event (these events are for printing and gui updates only)
+        event_bus.emit(
+            event=SoulseekSearchStartEvent(
+                search_id=search_id, 
+                search_query=search_query
+            )
+        )
 
-        with rich_console.status(f"[light_steel_blue]Searching SoulSeek for:[/light_steel_blue] [bright_white]{search_query}[/bright_white]", spinner="earth") as status:
-            while True:
-                search_state = self.client.searches.state(search_id)
-                num_found_files = search_state["fileCount"]
-                is_complete = search_state["isComplete"]
+        # while the search is not complete, send update events with info about how many files were found so far
+        is_complete = False
+        total_found_files = 0
+        while is_complete == False:
+            search_state = self.client.searches.state(search_id)
+            is_complete = search_state["isComplete"]
+            num_found_files = search_state["fileCount"]
 
-                if is_complete:
-                    break
+            if num_found_files > total_found_files:
+                total_found_files = num_found_files
+                event_bus.emit(
+                    event=SoulseekSearchUpdateEvent(
+                        search_id=search_id, 
+                        search_query=search_query, 
+                        num_found_files=num_found_files
+                    )
+                )
 
-                status.update(f"[light_steel_blue]Searching SoulSeek for:[/light_steel_blue] [bright_white]{search_query}[/bright_white] [light_steel_blue]| Total Files found[/light_steel_blue]: [bright_white]{num_found_files}[/bright_white]")
-                time.sleep(.1)
+            time.sleep(.1)
 
+        # now that the search is done we can gather results
         search_results = self.client.searches.search_responses(search_id)
 
-        # filter for just relevant results - audio files that are downloadable from the user
+        # filter for just relevant results - audio files that are downloadable from the user sorted by quality
         relevant_results = self.filter_search_results(search_results)
         if relevant_results is None:
             logger.info("No relevant results found on Soulseek")
-            return None
 
-        rich_console.print(f"[light_steel_blue]Search complete for:[/light_steel_blue] [bright_white]{search_query}[/bright_white] [light_steel_blue]| Relevant Files found[/light_steel_blue]: [bright_white]{len(relevant_results)}[/bright_white]")
+        # finally, emit a search end event and return the results
+        event_bus.emit(
+            event=SoulseekSearchEndEvent(
+                search_id=search_id,
+                search_query=search_query,
+                num_relevant_files=total_found_files
+            )
+        )
+
         return relevant_results
 
     # TODO: we need to analyze the relevance of the results somehow
