@@ -43,7 +43,15 @@ class CLIOrchestrator():
         self.soulseek_downloader = soulseek_downloader
         self.app_params = app_params
 
+        EventLinker.on(SoulseekDownloadStartEvent)(self._on_soulseek_download_start)
+        EventLinker.on(SoulseekDownloadUpdateEvent)(self._on_soulseek_download_update)
+        EventLinker.on(SoulseekDownloadEndEvent)(self._on_soulseek_download_end)
 
+        EventLinker.on(SoulseekSearchStartEvent)(self._on_soulseek_search_start)
+        EventLinker.on(SoulseekSearchUpdateEvent)(self._on_soulseek_search_update)
+        EventLinker.on(SoulseekSearchEndEvent)(self._on_soulseek_search_end)
+
+        # TODO: fix this bullshit FUCK
         self._rich_console = rich.console.Console()
         self._rich_progress = rich.progress.Progress(
             rich.progress.SpinnerColumn(spinner_name="earth"),
@@ -65,14 +73,6 @@ class CLIOrchestrator():
 
         self._soulseek_downloads: Dict[str, rich.progress.TaskID] = {}
         self._search_task_id: rich.progress.TaskID = None
-
-        EventLinker.on(SoulseekDownloadStartEvent)(self._on_soulseek_download_start)
-        EventLinker.on(SoulseekDownloadUpdateEvent)(self._on_soulseek_download_update)
-        EventLinker.on(SoulseekDownloadEndEvent)(self._on_soulseek_download_end)
-
-        EventLinker.on(SoulseekSearchStartEvent)(self._on_soulseek_search_start)
-        EventLinker.on(SoulseekSearchUpdateEvent)(self._on_soulseek_search_update)
-        EventLinker.on(SoulseekSearchEndEvent)(self._on_soulseek_search_end)
 
     def run(self):
         args = self.parse_cmdline_args()
@@ -148,10 +148,12 @@ class CLIOrchestrator():
         
         return args
     
+    # TODO: FIX ALA DEE HOE
+    # FUCK
+
     def _on_soulseek_download_start(self, download_start_event: SoulseekDownloadStartEvent):
         tid = self._rich_progress.add_task(f"Downloading {download_start_event.download_filename}", total=100)
         self._soulseek_downloads[download_start_event.download_file_id] = tid
-
 
     def _on_soulseek_download_update(self, download_update_event: SoulseekDownloadUpdateEvent):
         tid = self._soulseek_downloads.get(download_update_event.download_file_id)
