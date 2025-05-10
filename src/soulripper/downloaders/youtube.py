@@ -38,8 +38,10 @@ def download_track_ytdlp(search_query: str, output_path: str) -> str :
 
     # log and save the output since we need to search it for the filepath
     for line in iter(process.stdout.readline, ''):
-        logger.info(line)
-        ytdlp_output += line
+        line = line.rstrip()
+        if line:
+            logger.info(line)
+            ytdlp_output += line
 
     process.stdout.close()
     process.wait()
