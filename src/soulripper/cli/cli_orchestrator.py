@@ -1,9 +1,21 @@
 import sqlalchemy as sqla
 from sqlalchemy.orm import Session
 from pyventus.events import EventLinker
+from typing import Dict
 import logging
 import argparse
 import os
+
+from rich.console import Console
+from rich.progress import (
+    Progress,
+    SpinnerColumn,
+    BarColumn,
+    TextColumn,
+    TaskProgressColumn,
+    TimeRemainingColumn,
+    TaskID
+)
 
 from soulripper.database import update_db_with_spotify_playlist
 from soulripper.database import add_local_library_to_db, add_local_track_to_db
@@ -43,7 +55,34 @@ class CLIOrchestrator():
         EventLinker.on(SoulseekSearchUpdateEvent)(self._on_soulseek_search_update)
         EventLinker.on(SoulseekSearchEndEvent)(self._on_soulseek_search_end)
 
+        # style config for rich
+        console = Console()
+        self.progress = Progress(
+            SpinnerColumn(spinner_name="earth"),
+            TextColumn("{task.description}"),
+            BarColumn(
+                bar_width=None,
+                complete_style="green",
+                finished_style="green",
+                pulse_style="deep_pink4",
+                style="deep_pink4"
+            ),
+            TaskProgressColumn(style="green"),
+            TimeRemainingColumn(),
+            console=console,
+            transient=True,
+            refresh_per_second=10,
+            expand=True
+        )
+
+        # dicts that keep track of download and search tasks
+        self.download_tasks: Dict[str, TaskID]  = {}
+        self.search_tasks: Dict[str, TaskID] = {}
+
+
     def run(self):
+        self.progress.start()
+
         args = self.parse_cmdline_args()
 
         SEARCH_QUERY = args.search_query
@@ -93,6 +132,8 @@ class CLIOrchestrator():
             download_playlist_from_spotify_url(self.soulseek_downloader, self.spotify_client, self.sql_session, SPOTIFY_PLAYLIST_URL, self.app_params.output_path)
             pass
 
+        self.progress.stop()
+
     def parse_cmdline_args(self) -> argparse.Namespace:
         # add all the arguments
         parser = argparse.ArgumentParser(description="")
@@ -117,20 +158,46 @@ class CLIOrchestrator():
         
         return args
     
-    def _on_soulseek_download_start(self, download_start_event: SoulseekDownloadStartEvent):
-        pass
+    async def _on_soulseek_download_start(self, event: SoulseekDownloadStartEvent):
+        """Create a new progress bar for this download."""
+        task_id = self.progress.add_task(
+            description=f"[light_steel_blue]Downloading:[/light_steel_blue] [bright_white]{event.download_filename}[/bright_white]",
+            total=100.0,
+        )
+        self.download_tasks[event.download_file_id] = task_id
 
-    def _on_soulseek_download_update(self, download_update_event: SoulseekDownloadUpdateEvent):
-        pass
+    async def _on_soulseek_download_update(self, event: SoulseekDownloadUpdateEvent):
+        """Advance the download bar to the new percent complete."""
+        task_id = self.download_tasks.get(event.download_file_id)
+        if task_id is not None:
+            self.progress.update(task_id, completed=event.percent_complete)
 
-    def _on_soulseek_download_end(self, download_end_event: SoulseekDownloadEndEvent):
-        pass
+    async def _on_soulseek_download_end(self, event: SoulseekDownloadEndEvent):
+        """Finalize and remove the download bar."""
+        task_id = self.download_tasks.pop(event.download_file_id, None)
+        if task_id is not None:
+            self.progress.update(task_id, completed=100.0)
+            self.progress.remove_task(task_id)
 
-    def _on_soulseek_search_start(self, search_start: SoulseekSearchStartEvent):
-        pass
+    async def _on_soulseek_search_start(self, event: SoulseekSearchStartEvent):
+        """Create an indeterminate spinner for the search."""
+        task_id = self.progress.add_task(
+            description=f"[light_steel_blue]Searching Soulseek for:[/light_steel_blue] [bright_white]“{event.search_query}”[/bright_white]",
+            total=None,
+        )
+        self.search_tasks[event.search_id] = task_id
 
-    def _on_soulseek_search_update(self, search_update: SoulseekSearchUpdateEvent):
-        pass
+    async def _on_soulseek_search_update(self, event: SoulseekSearchUpdateEvent):
+        """Update the search spinner’s description with count so far."""
+        task_id = self.search_tasks.get(event.search_id)
+        if task_id is not None:
+            self.progress.update(
+                task_id,
+                description=f"[light_steel_blue]Searching Soulseek for:[/light_steel_blue] [bright_white]“{event.search_query}”[/bright_white] [light_steel_blue]Found[/light_steel_blue] [bright_white]{event.num_found_files}[/bright_white] [light_steel_blue]files[/light_steel_blue]",
+            )
 
-    def _on_soulseek_search_end(self, search_end: SoulseekSearchEndEvent):
-        pass
+    async def _on_soulseek_search_end(self, event: SoulseekSearchEndEvent):
+        """Remove the search spinner when complete."""
+        task_id = self.search_tasks.pop(event.search_id, None)
+        if task_id is not None:
+            self.progress.remove_task(task_id)
