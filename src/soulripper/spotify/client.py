@@ -28,7 +28,12 @@ class SpotifyClient():
                 open_browser=True
             )
         )
-        self.USER_ID = self.spotipy_client.current_user()["id"]
+
+        try:
+            self.USER_ID = self.spotipy_client.current_user()["id"]
+        except Exception as e:
+            logger.warning(f"Spotify API Error, sleeping... error: {e}")
+            time.sleep(1)
 
     def get_playlist_id(self, playlist_name):
         for playlist in self.get_all_playlists():

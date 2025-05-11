@@ -1,6 +1,8 @@
 import sqlalchemy as sqla
 from sqlalchemy.orm import Session
 from pyventus.events import EventLinker
+import alive_progress
+from alive_progress import config_handler
 import logging
 import asyncio
 import argparse
@@ -35,10 +37,17 @@ class CLIOrchestrator():
         self._soulseek_downloader = soulseek_downloader
         self._app_params = app_params
 
+        # this is just logic for the spinner. in the future we hopefully wont need self._event_loop since everything will be migrated to async await
         self._event_loop = asyncio.AbstractEventLoop
         self._spinner_task = None
         self._spinner_running = False
         self._num_found_files: int
+
+        # this is config for the download bar, it forces us to use a context. also length is the length of JUST the bar exluding text so we only set the lenght to 80% terminal size
+        self._terminal_size: int = os.get_terminal_size().columns - int(os.get_terminal_size().columns / 5)
+        self._download_bar: alive_progress.alive_bar = None
+        self._download_bar_ctx = None
+        config_handler.set_global(length=self._terminal_size, bar='notes')
 
         # attach download event listeners
         EventLinker.on(SoulseekDownloadStartEvent)(self._on_soulseek_download_start)
@@ -51,7 +60,7 @@ class CLIOrchestrator():
         EventLinker.on(SoulseekSearchEndEvent)(self._on_soulseek_search_end)
 
     def run(self):
-        """Spins up a new asyncio coroutine that manages the CLI"""
+        """Spins up a new asyncio coroutine that manages the CLI - also executes some database initialization steps"""
 
         args = self.parse_cmdline_args()
         DROP_DATABASE = args.drop_database
@@ -74,6 +83,8 @@ class CLIOrchestrator():
         asyncio.run(self.async_run(args=args))
 
     async def async_run(self, args: argparse.Namespace):
+        """executes different code depending on the passed in args"""
+
         # connect the downloader to the event loop - TODO: i think this will be unnecessary once we refactor everything to use async
         self._event_loop = asyncio.get_event_loop()
         self._soulseek_downloader.event_loop = self._event_loop
@@ -112,15 +123,19 @@ class CLIOrchestrator():
             await asyncio.to_thread(download_playlist_from_spotify_url, self._soulseek_downloader, self._spotify_client, self._sql_session, SPOTIFY_PLAYLIST_URL, self._app_params.output_path)
 
     async def _on_soulseek_search_start(self, event: SoulseekSearchStartEvent):
+        """initializes a new earth spinner and does some printing"""
+
         self.update_last_line(f"Searching Soulseek for: '{event.search_query}'")
         self._num_found_files = 0
         self._spinner_running = True
         self._spinner_task = asyncio.create_task(self._spinnup_spinner(event=event))
 
     async def _on_soulseek_search_update(self, event: SoulseekSearchUpdateEvent):
+        """updates the number of found files"""
         self._num_found_files = event.num_found_files
 
     async def _on_soulseek_search_end(self, event: SoulseekSearchEndEvent):
+        """stops the spinner and does some printing"""
         self._spinner_running = False
         if self._spinner_task:
             await self._spinner_task
@@ -128,15 +143,33 @@ class CLIOrchestrator():
         self.update_last_line(f"🌐 Soulseek search finished. Query: {event.search_query} | Relevant files found: {event.num_relevant_files}\n")
 
     async def _on_soulseek_download_start(self, event: SoulseekDownloadStartEvent):
-        self.update_last_line(f"Soulseek download started, filename: {event.download_filename}, user: {event.download_user}")
+        """initializes a progress bar for the download"""
+        self.update_terminal_size()
+
+        self._download_bar_ctx = alive_progress.alive_bar(100, manual=True)
+        self._download_bar = self._download_bar_ctx.__enter__()
 
     async def _on_soulseek_download_update(self, event: SoulseekDownloadUpdateEvent):
-        self.update_last_line(f"Soulseek download updated, filename: {event.download_filename} | percent downloaded: {round(event.percent_complete, 2)}")
+        """updates the progress bar"""
+        self.update_terminal_size()
+
+        if self._download_bar is not None:
+            self._download_bar(round(event.percent_complete / 100, 2))
 
     async def _on_soulseek_download_end(self, event: SoulseekDownloadEndEvent):
-        self.update_last_line(f"Soulseek download finished, filepath: {event.final_filepath}, state: {event.end_state}\n\n")
+        """cleans up the progress bar"""
+        self.update_terminal_size()
+
+        if self._download_bar is not None:
+            self._download_bar(1.0)
+        if self._download_bar_ctx is not None:
+            self._download_bar_ctx.__exit__(None, None, None)
+
+        self._download_bar = None
+        self._download_bar_ctx = None
 
     async def _spinnup_spinner(self, event: SoulseekSearchStartEvent):
+        """starts a new async coroutine which simply updates the console with a spinning earth emoji"""
         update_counter = 0
         spinner_frames = ['🌍', '🌏','🌎']
         while self._spinner_running:
@@ -148,9 +181,16 @@ class CLIOrchestrator():
     def update_last_line(self, new_line: str) -> None : 
         """moves the cursor up one line to replace the previous line printed with new_line"""
         sys.stdout.write("\r\x1b[2K" + new_line)
-        sys.stdout.flush()  
+        sys.stdout.flush()
+
+    def update_terminal_size(self) -> None:
+        """update the length gloal config of alive progress to be the 80% the size of the terminal. For some reason it specefies the length of the bar not the entire text"""
+        self._terminal_size = os.get_terminal_size().columns - int(os.get_terminal_size().columns / 5)
+        config_handler.set_global(length=self._terminal_size, bar='notes')
 
     def parse_cmdline_args(self) -> argparse.Namespace:
+        """creates an argparse parser, adds all the arguments, and updates _app_params with parsed values. returns the args"""
+
         # add all the arguments
         parser = argparse.ArgumentParser(description="")
         parser.add_argument("--output-path", type=str, dest="output_path", help="The output directory in which your files will be downloaded")

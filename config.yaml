@@ -3,6 +3,7 @@
 # NOTE: all paths must be absolute
 
 paths:
+  music_dir_root: /home/soulripper/debug/music                        # unimplemented
   output_path: /home/soulripper/debug/music
   youtube_cookie_filepath: /home/soulripper/assets/cookies.txt
   database_path: /home/soulripper/assets/soul.db
@@ -11,7 +12,7 @@ download_behavior:
   youtube_only: False
   soulseek_only: False                                                # unimplemented
   max_retries: 5                                                      # unimplemented
-  inactive_download_timeout: 10                                       # unimplemented
+  inactive_download_timeout: 5                                        # unimplemented
 
 audio:
   valid_extensions:
