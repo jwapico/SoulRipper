@@ -7,6 +7,9 @@ RUN mkdir /home/soulripper
 WORKDIR /home/soulripper
 
 COPY pyproject.toml .
+COPY README.md .
+COPY src/ ./src/
+RUN python3 -m pip install --upgrade pip setuptools wheel
 RUN python3 -m venv venv
 RUN bash -c "source venv/bin/activate && pip install ."
 
