@@ -43,11 +43,10 @@ class CLIOrchestrator():
         self._spinner_running = False
         self._num_found_files: int
 
-        # this is config for the download bar, it forces us to use a context. also length is the length of JUST the bar exluding text so we only set the lenght to 80% terminal size
-        self._terminal_size: int = os.get_terminal_size().columns - int(os.get_terminal_size().columns / 5)
+        # this is config for the download bar, it forces us to use a context. also length is the length of JUST the bar exluding text so we only set the lenght to 50% terminal size
         self._download_bar: alive_progress.alive_bar = None
         self._download_bar_ctx = None
-        config_handler.set_global(length=self._terminal_size, bar='notes')
+        self.update_terminal_size()
 
         # attach download event listeners
         EventLinker.on(SoulseekDownloadStartEvent)(self._on_soulseek_download_start)
@@ -77,6 +76,7 @@ class CLIOrchestrator():
         Base.metadata.create_all(self._db_engine)
 
         # TODO: experiment with this in and out of async function to see if things are dramatically faster inside
+        # populate the database with metadata found from files in the users output directory
         add_local_library_to_db(self._sql_session, self._app_params.output_path, self._app_params.valid_music_extensions)
 
         # now enter our main logic from an async function
@@ -95,12 +95,9 @@ class CLIOrchestrator():
         DOWNLOAD_ALL_PLAYLISTS = args.download_all_playlists
         NEW_TRACK_FILEPATH = args.add_track
 
-        # populate the database with metadata found from files in the users output directory
-
         if NEW_TRACK_FILEPATH:
             await asyncio.to_thread(add_local_track_to_db, self._sql_session, NEW_TRACK_FILEPATH)
 
-        # if a search query is provided, download the track
         if SEARCH_QUERY:
             output_path = await asyncio.to_thread(download_from_search_query, self._soulseek_downloader, SEARCH_QUERY, self._app_params.output_path, self._app_params.youtube_only, self._app_params.max_download_retries)
             # TODO: get metadata and insert into database
@@ -146,22 +143,21 @@ class CLIOrchestrator():
         """initializes a progress bar for the download"""
         self.update_terminal_size()
 
-        self._download_bar_ctx = alive_progress.alive_bar(100, manual=True)
+        self._download_bar_ctx = alive_progress.alive_bar(100, manual=True, title=f"Downlading '{event.download_filename}'", monitor="{count}%")
         self._download_bar = self._download_bar_ctx.__enter__()
 
     async def _on_soulseek_download_update(self, event: SoulseekDownloadUpdateEvent):
         """updates the progress bar"""
-        self.update_terminal_size()
-
         if self._download_bar is not None:
             self._download_bar(round(event.percent_complete / 100, 2))
 
     async def _on_soulseek_download_end(self, event: SoulseekDownloadEndEvent):
         """cleans up the progress bar"""
-        self.update_terminal_size()
-
         if self._download_bar is not None:
-            self._download_bar(1.0)
+            if event.end_state == "Completed, Succeeded":
+                self._download_bar(1.0)
+            else:
+                self._download_bar(0.0)
         if self._download_bar_ctx is not None:
             self._download_bar_ctx.__exit__(None, None, None)
 
@@ -184,9 +180,9 @@ class CLIOrchestrator():
         sys.stdout.flush()
 
     def update_terminal_size(self) -> None:
-        """update the length gloal config of alive progress to be the 80% the size of the terminal. For some reason it specefies the length of the bar not the entire text"""
-        self._terminal_size = os.get_terminal_size().columns - int(os.get_terminal_size().columns / 5)
-        config_handler.set_global(length=self._terminal_size, bar='notes')
+        """update the length gloal config of alive progress to be the 50% the size of the terminal. For some reason it specefies the length of the bar not the entire text"""
+        new_len = os.get_terminal_size().columns - int(os.get_terminal_size().columns / 2)
+        config_handler.set_global(length=new_len, bar='notes')
 
     def parse_cmdline_args(self) -> argparse.Namespace:
         """creates an argparse parser, adds all the arguments, and updates _app_params with parsed values. returns the args"""

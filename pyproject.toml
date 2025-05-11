@@ -19,7 +19,8 @@ dependencies = [
   "keyboard",
   "pyyaml",
   "rich",
-  "pyventus"
+  "pyventus",
+  "alive_progress"
 ]
 
 [project.urls]
