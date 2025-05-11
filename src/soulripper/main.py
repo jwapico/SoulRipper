@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
 import sqlalchemy as sqla
+import sqlalchemy.orm
 import sys
 import os
 import dotenv
@@ -30,7 +31,7 @@ def main():
 
     # create the engine with the local soul.db file and create a session
     db_engine = sqla.create_engine(f"sqlite:///{app_params.database_path}", echo=app_params.db_echo)
-    sessionmaker = sqla.orm.sessionmaker(bind=db_engine)
+    sessionmaker = sqlalchemy.orm.sessionmaker(bind=db_engine)
     sql_session: Session = sessionmaker()
 
     # initialize the tables defined in souldb.py
