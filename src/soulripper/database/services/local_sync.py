@@ -5,7 +5,7 @@ import logging
 from soulripper.utils import extract_file_metadata
 
 from ..schemas import TrackData
-from ..repositories import get_existing_track, add_track
+from ..repositories import TracksRepository
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,7 @@ def add_local_library_to_db(sql_session, music_dir: str, valid_extensions: List[
             file_extension = os.path.splitext(filename)[1]
             if file_extension in valid_extensions:
                 filepath = os.path.abspath(os.path.join(root, filename))
-                existing_track = get_existing_track(sql_session, TrackData(filepath=filepath))
+                existing_track = TracksRepository.get_existing_track(sql_session, TrackData(filepath=filepath))
                 if existing_track is None:
                     add_local_track_to_db(sql_session, filepath)
 
@@ -45,6 +45,6 @@ def add_local_track_to_db(sql_session, filepath: str):
 
     logger.info(f"Found track with data: {file_track_data}, adding to database...")
 
-    existing_track = get_existing_track(sql_session, file_track_data)
+    existing_track = TracksRepository.get_existing_track(sql_session, file_track_data)
     if existing_track is None:
-        add_track(sql_session, file_track_data)
+        TracksRepository.add_track(sql_session, file_track_data)
