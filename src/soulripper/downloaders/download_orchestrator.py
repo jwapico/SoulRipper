@@ -4,7 +4,7 @@ import os
 
 from soulripper.database.models import Tracks, Playlists, Artists, PlaylistTracks, TrackArtists
 from soulripper.database.services import update_db_with_spotify_liked_tracks
-from soulripper.database.crud import get_existing_track, add_track, add_playlist
+from soulripper.database.repositories import get_existing_track, add_track, add_playlist
 from soulripper.database.schemas import TrackData
 
 from soulripper.spotify import SpotifyClient

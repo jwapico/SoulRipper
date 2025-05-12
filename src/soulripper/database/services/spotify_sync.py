@@ -3,7 +3,7 @@ import logging
 from soulripper.spotify import SpotifyClient
 from ..schemas import TrackData
 from ..models import Playlists
-from ..crud import add_playlist, add_track_data_to_playlist
+from ..repositories import add_playlist, add_track_data_to_playlist
 
 logger = logging.getLogger(__name__)
 

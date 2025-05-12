@@ -2,7 +2,7 @@ import logging
 
 from ..models import Playlists, Tracks, PlaylistTracks
 from ..schemas import TrackData
-from .track_crud import bulk_add_tracks, get_existing_track
+from .tracks_repository import bulk_add_tracks, get_existing_track
 
 logger = logging.getLogger(__name__)
 

@@ -5,7 +5,7 @@ import logging
 from soulripper.utils import extract_file_metadata
 
 from ..schemas import TrackData
-from ..crud import get_existing_track, add_track
+from ..repositories import get_existing_track, add_track
 
 logger = logging.getLogger(__name__)
 
