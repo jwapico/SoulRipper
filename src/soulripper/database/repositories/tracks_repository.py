@@ -37,7 +37,6 @@ class TracksRepository():
             album=track_data.album,
             release_date=track_data.release_date,
             explicit=track_data.explicit,
-            date_liked_spotify=track_data.date_liked_spotify,
             comments=track_data.comments
         )
 
@@ -71,17 +70,16 @@ class TracksRepository():
         existing_track.album = new_track_data.album if new_track_data.album is not None else existing_track.album
         existing_track.release_date = new_track_data.release_date if new_track_data.release_date is not None else existing_track.release_date
         existing_track.explicit = new_track_data.explicit if new_track_data.explicit is not None else existing_track.explicit
-        existing_track.date_liked_spotify = new_track_data.date_liked_spotify if new_track_data.date_liked_spotify is not None else existing_track.date_liked_spotify
         existing_track.comments = new_track_data.comments if new_track_data.comments is not None else existing_track.comments
 
         sql_session.flush()
 
     @classmethod
     def remove_track(clc, sql_session: sqlalchemy.orm.Session, track_id: int) -> bool :
-        existing_track = sql_session.query(Tracks).filter_by(id=track_id).one()
+        track = sql_session.query(Tracks).filter_by(id=track_id).one()
 
-        if existing_track:
-            sql_session.delete(existing_track)
+        if track:
+            sql_session.delete(track)
             sql_session.flush()
             logger.info(f"Successfully removed the track with id: {track_id}")
             return True
@@ -103,15 +101,42 @@ class TracksRepository():
 
     @classmethod
     def bulk_add_tracks(clc, sql_session: sqlalchemy.orm.Session, track_data_list: set[TrackData]) -> None:
+        # get all of the existing spotify ids of tracks in the database so we can make sure we don't re add them
+        existing_spotify_ids = {
+            sid 
+            for (sid,) in sql_session.query(Tracks.spotify_id).filter(Tracks.spotify_id.isnot(None)).all()}
+
+        # make a with keys holding unique information on title, album, and filepath so we can make sure we don't re add local tracks 
+        existing_local_tracks = {
+            (track.title, track.album, track.filepath)
+            for track in sql_session.query(Tracks.title, Tracks.album, Tracks.filepath).filter(Tracks.spotify_id.is_(None)).all()
+        }
+
+        # build a list of new_tracks which are not already present in the database/found in the dicts above 
+        new_tracks = []
+        for track_data in track_data_list:
+            if track_data.spotify_id is None:
+                key = (track_data.title, track_data.album, track_data.filepath)
+                if key not in existing_local_tracks:
+                    existing_local_tracks.add(key)
+                    new_tracks.append(track_data)
+            else:
+                if track_data.spotify_id not in existing_spotify_ids:
+                    existing_spotify_ids.add(track_data.spotify_id)
+                    new_tracks.append(track_data)
+
+        # create a dict of all artists with their names as keys so we can make sure we aren't adding duplicates 
         existing_artists = {
             artist.name: artist
             for artist in sql_session.query(Artists).all()
         }
 
-        new_tracks = []
-        new_track_artist_associations = []
+        # initialize empty arrays for orm track rows and orm associations
+        orm_tracks = []
+        orm_artist_assocs = []
 
-        for track_data in track_data_list:
+        # for each new track, create and append a new orm Track object, as well as create a new artist association if the artist doesn't already exist for each artist
+        for track_data in new_tracks:
             track = Tracks(
                 spotify_id=track_data.spotify_id,
                 filepath=track_data.filepath,
@@ -119,13 +144,12 @@ class TracksRepository():
                 album=track_data.album,
                 release_date=track_data.release_date,
                 explicit=track_data.explicit,
-                date_liked_spotify=track_data.date_liked_spotify,
                 comments=track_data.comments
             )
 
-            new_tracks.append(track)
+            orm_tracks.append(track)
 
-            # Link artists
+            # create and append a new orm TrackArtists assoc if the artist wasn't already in the database
             if track_data.artists:
                 for name, artist_spotify_id in track_data.artists:
                     artist = existing_artists.get(name)
@@ -136,15 +160,10 @@ class TracksRepository():
                         existing_artists[name] = artist
 
                     assoc = TrackArtists(track=track, artist=artist)
-                    new_track_artist_associations.append(assoc)
+                    orm_artist_assocs.append(assoc)
 
-        # now try to add everything in one shot
-        try:
-            sql_session.add_all(new_tracks)
-            sql_session.add_all(new_track_artist_associations)
-            sql_session.flush()
-        except sqlalchemy.exc.IntegrityError as e:
-            sql_session.rollback()
-            logger.warning(f"Integrety Error, id likely already exists: {e}")
-
+        # now add everything in one shot
+        sql_session.add_all(orm_tracks)
+        sql_session.add_all(orm_artist_assocs)
+        sql_session.flush()
         logger.info(f"Inserted {len(new_tracks)} new tracks.")

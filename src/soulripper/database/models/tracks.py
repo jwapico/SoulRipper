@@ -16,7 +16,6 @@ class Tracks(Base):
     album = sqla.Column(sqla.String, nullable=True)
     release_date = sqla.Column(sqla.String, nullable=True)
     explicit = sqla.Column(sqla.Boolean, nullable=True)
-    date_liked_spotify = sqla.Column(sqla.String, nullable=True)
     comments = sqla.Column(sqla.String, nullable=True)
     playlist_tracks = sqla.orm.relationship("PlaylistTracks", back_populates="track", cascade="all, delete-orphan")
 

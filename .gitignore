@@ -186,7 +186,7 @@ assets/slskd.yml
 *.json
 !.vscode/settings.json
 *.webm
-assets/soul.db
+*.db
 assets/soul.db-journal
 .DS_Store
 debug/*

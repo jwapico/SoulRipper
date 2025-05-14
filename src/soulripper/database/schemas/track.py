@@ -12,7 +12,6 @@ class TrackData:
         artists (list[(str, str)]): a list of each artists name and id for the track
         album (str): the album of the track
         release_date (str): the release date of the track
-        date_liked_spotify (str): the date the track was liked on Spotify
         explicit (bool): whether the track is explicit or not
         comments (str): any comments about the track
     """
@@ -22,7 +21,6 @@ class TrackData:
     artists: list[(str, str)] = None
     album: str = None
     release_date: str = None
-    date_liked_spotify: str = None
     explicit: bool = None
     comments: str = None
 

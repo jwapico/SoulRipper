@@ -1,5 +1,6 @@
 import logging
-from typing import Optional, List
+from typing import Optional, List, Tuple
+import datetime
 import sqlalchemy
 import sqlalchemy.orm
 import sqlalchemy.exc
@@ -19,8 +20,6 @@ class PlaylistsRepository():
         try:
             return sql_session.query(Playlists).filter_by(spotify_id=spotify_id).one()
         except sqlalchemy.exc.NoResultFound as e:
-            logger.warning(f"No playlist with spotify id: {spotify_id} found, returning None {e}")
-            sql_session.rollback()
             return None
         
     @classmethod
@@ -28,8 +27,6 @@ class PlaylistsRepository():
         try:
             return sql_session.query(Playlists).filter_by(name=playlist_name).one()
         except sqlalchemy.exc.NoResultFound as e:
-            logger.warning(f"No playlist with playlist_name: {playlist_name} found, returning None {e}")
-            sql_session.rollback()
             return None
     
     @classmethod
@@ -41,7 +38,6 @@ class PlaylistsRepository():
         existing_playlist = PlaylistsRepository.get_playlist_by_spotify_id(sql_session=sql_session, spotify_id=spotify_id) or PlaylistsRepository.search_for_playlist_by_title(sql_session=sql_session, playlist_name=name)
 
         if existing_playlist:
-            logger.warning(f"Found an existing playlist with identical spotify_id ({spotify_id}) or name ({name}), returning that one")
             return existing_playlist
 
         new_playlist = Playlists(
@@ -56,7 +52,7 @@ class PlaylistsRepository():
         return new_playlist
 
     @classmethod
-    def add_track_data_to_playlist(clc, sql_session: sqlalchemy.orm.Session, track_data_list: list[TrackData], playlist_row: Playlists) -> None:
+    def add_track_data_to_playlist(clc, sql_session: sqlalchemy.orm.Session, playlist_track_data: List[Tuple[TrackData, datetime.datetime]], playlist_row: Playlists) -> None:
         existing_spotify_ids = set(spotify_id for spotify_id in sql_session.query(Tracks.spotify_id).filter(Tracks.spotify_id.isnot(None)))
 
         existing_non_spotify_tracks = set(
@@ -69,7 +65,7 @@ class PlaylistsRepository():
         seen_spotify_ids = set()
         seen_non_spotify = set()
 
-        for track_data in track_data_list:
+        for track_data, date_added in playlist_track_data:
             if track_data.spotify_id:
                 if track_data.spotify_id in existing_spotify_ids or track_data.spotify_id in seen_spotify_ids:
                     continue
@@ -81,7 +77,7 @@ class PlaylistsRepository():
                 seen_non_spotify.add(key)
             new_tracks.add(track_data)
                 
-        TracksRepository.bulk_add_tracks(sql_session,new_tracks)
+        TracksRepository.bulk_add_tracks(sql_session, new_tracks)
         
         existing_assoc_keys = set(
             (playlist_id, track_id)
@@ -90,12 +86,13 @@ class PlaylistsRepository():
                 PlaylistTracks.track_id
             ).all()
         )
-        for track_data in track_data_list:
-            track = TracksRepository.get_existing_track(sql_session,track_data)
-            if track:
-                assoc = PlaylistTracks(track_id=track.id, playlist_id=playlist_row.id, added_at=track.date_liked_spotify)
+
+        for track_data, date_added in playlist_track_data:
+            existing_track = TracksRepository.get_existing_track(sql_session,track_data)
+            if existing_track:
+                assoc = PlaylistTracks(track_id=existing_track.id, playlist_id=playlist_row.id, added_at=date_added)
                 if (assoc.playlist_id, assoc.track_id) not in existing_assoc_keys:
                     existing_assoc_keys.add(assoc)
                     playlist_row.playlist_tracks.append(assoc)
             else:
-                logger.debug(f"track_data is empty in track_data_list: {track_data_list}")
+                logger.debug(f"track_data is empty in track_data_list: {playlist_track_data}")

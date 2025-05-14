@@ -20,7 +20,8 @@ dependencies = [
   "pyyaml",
   "rich",
   "pyventus",
-  "alive_progress"
+  "alive_progress",
+  "python-dateutil"
 ]
 
 [project.urls]
