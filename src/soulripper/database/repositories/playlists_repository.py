@@ -52,47 +52,34 @@ class PlaylistsRepository():
         return new_playlist
 
     @classmethod
-    def add_track_data_to_playlist(clc, sql_session: sqlalchemy.orm.Session, playlist_track_data: List[Tuple[TrackData, datetime.datetime]], playlist_row: Playlists) -> None:
-        existing_spotify_ids = set(spotify_id for spotify_id in sql_session.query(Tracks.spotify_id).filter(Tracks.spotify_id.isnot(None)))
-
-        existing_non_spotify_tracks = set(
-            (title, album, filepath) for (title, album, filepath) in sql_session.query(
-                Tracks.title, Tracks.album, Tracks.filepath
-            ).filter(Tracks.spotify_id.is_(None))
-        )
-
-        new_tracks = set()
-        seen_spotify_ids = set()
-        seen_non_spotify = set()
-
-        for track_data, date_added in playlist_track_data:
-            if track_data.spotify_id:
-                if track_data.spotify_id in existing_spotify_ids or track_data.spotify_id in seen_spotify_ids:
-                    continue
-                seen_spotify_ids.add(track_data.spotify_id)
-            else:
-                key = (track_data.title, track_data.album, track_data.filepath)
-                if key in existing_non_spotify_tracks or key in seen_non_spotify:
-                    continue
-                seen_non_spotify.add(key)
-            new_tracks.add(track_data)
-                
-        TracksRepository.bulk_add_tracks(sql_session, new_tracks)
+    def add_tracks_to_playlist(clc, sql_session: sqlalchemy.orm.Session, playlist_track_data: List[Tuple[TrackData, datetime.datetime]], playlist_row: Playlists) -> None:
+        # first add all the tracks to the Tracks table
+        TracksRepository.bulk_add_tracks(sql_session, [track_data for track_data, _ in playlist_track_data])
         
-        existing_assoc_keys = set(
+        # make a dict of existing associations where the key is the playlist_id and track_id so we can check for duplicates
+        existing_assoc_keys = {
             (playlist_id, track_id)
             for playlist_id, track_id in sql_session.query(
                 PlaylistTracks.playlist_id,
                 PlaylistTracks.track_id
             ).all()
-        )
+        }
 
+        # for each track in the playlist, create a new PlaylistTracks association entry 
         for track_data, date_added in playlist_track_data:
-            existing_track = TracksRepository.get_existing_track(sql_session,track_data)
-            if existing_track:
-                assoc = PlaylistTracks(track_id=existing_track.id, playlist_id=playlist_row.id, added_at=date_added)
-                if (assoc.playlist_id, assoc.track_id) not in existing_assoc_keys:
-                    existing_assoc_keys.add(assoc)
-                    playlist_row.playlist_tracks.append(assoc)
-            else:
-                logger.debug(f"track_data is empty in track_data_list: {playlist_track_data}")
+            track_row = TracksRepository.get_existing_track(sql_session, track_data)
+
+            if track_row is None:
+                logger.error(f"couldnt find track in Tracks table even though it should have been bulk added. TrackData: {track_data}")
+                track_row = TracksRepository.add_track(track_data)
+
+            key = (playlist_row.id, track_row.id)
+            if key not in existing_assoc_keys:
+                existing_assoc_keys.add(key)
+                playlist_row.playlist_tracks.append(
+                    PlaylistTracks(
+                        playlist_id=playlist_row.id,
+                        track_id=track_row.id,
+                        added_at=date_added
+                    )
+                )
