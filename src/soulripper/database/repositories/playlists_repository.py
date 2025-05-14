@@ -11,9 +11,6 @@ from .tracks_repository import TracksRepository
 
 logger = logging.getLogger(__name__)
 
-# if we find that functionality in these crud files is being duplicated across multiple models (i.e. we have duplicated get_by_id methods) we can make a BaseCRUD class that all models inherit from
-# TODO: we may want to refactor this into a class at some point
-
 class PlaylistsRepository():
     @classmethod
     def get_playlist_by_spotify_id(clc, sql_session: sqlalchemy.orm.Session, spotify_id: str) -> Optional[Playlists]:
