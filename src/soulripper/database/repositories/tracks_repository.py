@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, List, Set
 import sqlalchemy.orm
 import sqlalchemy.exc
 import logging
@@ -11,25 +11,56 @@ logger = logging.getLogger(__name__)
 class TracksRepository():
     @classmethod
     def get_track_from_id(clc, sql_session: sqlalchemy.orm.Session, track_id: int) -> Optional[Tracks]:
+        """
+        Gets an ORM Tracks row from a track id
+
+        Args: 
+            sql_session (sqlalchemy.orm.Session): Your open SQLAlchemy Session
+            track_id (int): The ID of the Track you want to retrieve
+
+        Returns:
+            Optional[Tracks]: The ORM Tracks row, or None
+        """
         try:
             return sql_session.query(Tracks).filter_by(id=track_id).one()
-        except sqlalchemy.exc.NoResultFound as e:
-            logger.warning(f"No track with track_id: {track_id} found, returning None {e}")
-            sql_session.rollback()
+        except sqlalchemy.exc.NoResultFound:
             return None
         
     @classmethod
     def search_tracks_by_title(clc, sql_session: sqlalchemy.orm.Session, track_title: str) -> Optional[List[Tracks]]:
-        results = sql_session.query(Tracks).filter(Tracks.title.ilike(f"%{track_title}%")).all()
-        return results
+        """
+        Gets an ORM Tracks row from a track id
+
+        Args: 
+            sql_session (sqlalchemy.orm.Session): Your open SQLAlchemy Session
+            track_id (int): The ID of the Track you want to retrieve
+
+        Returns:
+            Optional[Tracks]: The ORM Tracks row, or None
+        """
+        try:
+            return sql_session.query(Tracks).filter(Tracks.title.ilike(f"%{track_title}%")).all()
+        except sqlalchemy.exc.NoResultFound:
+            return None
 
     @classmethod
     def add_track(clc, sql_session: sqlalchemy.orm.Session, track_data: TrackData) -> Optional[Tracks]:
+        """
+        Adds a new track to the Tracks table
+
+        Args: 
+            sql_session (sqlalchemy.orm.Session): Your open SQLAlchemy Session
+            track_data (TrackData): The TrackData of the track you want to add
+
+        Returns:
+            Optional[Tracks]: The new ORM Tracks row, or None
+        """
+        # if there is an existing track, return that
         existing_track = clc.get_existing_track(sql_session, track_data)
-        
         if existing_track:
             return existing_track
         
+        # create add and flush the new Track
         track = Tracks(
             spotify_id=track_data.spotify_id,
             filepath=track_data.filepath,
@@ -43,7 +74,7 @@ class TracksRepository():
         sql_session.add(track)
         sql_session.flush()
 
-        # add artists to the Artist table if they don't already exist, and add them to the TrackArtist association table
+        # add artists to the Artist table if they don't already exist, and add associations to the TrackArtist table
         if track_data.artists is not None:
             for name, spotify_id in track_data.artists:
                 existing_artist = sql_session.query(Artists).filter_by(name=name).first()
@@ -62,8 +93,20 @@ class TracksRepository():
 
     @classmethod
     def modify_track(clc, sql_session: sqlalchemy.orm.Session, track_id: int, new_track_data: TrackData) -> None:
+        """
+        Modifies a track in the Tracks table with new TrackData
+
+        Args: 
+            sql_session (sqlalchemy.orm.Session): Your open SQLAlchemy Session
+            track_id (int): The ID of the track you want to modify
+            new_track_data (TrackData): The new TrackData of the track you want to modify
+
+        Returns:
+            None
+        """
+        # get the existing track, update its fields with the new data if its there, and flush
         existing_track = sql_session.query(Tracks).filter_by(id=track_id).one()
-        
+
         existing_track.spotify_id = new_track_data.spotify_id if new_track_data.spotify_id is not None else existing_track.spotify_id
         existing_track.filepath = new_track_data.filepath if new_track_data.filepath is not None else existing_track.filepath
         existing_track.title = new_track_data.title if new_track_data.title is not None else existing_track.title
@@ -76,6 +119,17 @@ class TracksRepository():
 
     @classmethod
     def remove_track(clc, sql_session: sqlalchemy.orm.Session, track_id: int) -> bool :
+        """
+        Removes a track from the Tracks table 
+
+        Args: 
+            sql_session (sqlalchemy.orm.Session): Your open SQLAlchemy Session
+            track_id (int): The ID of the track you want to remove
+
+        Returns:
+            bool: Whether or not the track was successfully removed
+        """
+        # get the track, delete it, and flush
         track = sql_session.query(Tracks).filter_by(id=track_id).one()
 
         if track:
@@ -90,6 +144,16 @@ class TracksRepository():
     # TODO: We need a better way of checking for existing tracks when spotify_id and filepath is None
     @classmethod
     def get_existing_track(clc, session: sqlalchemy.orm.Session, track: TrackData) -> Optional[Tracks]:
+        """
+        Gets an existing track from the Tracks table. First searches by spotify_id, then by filepath, then by title and album. 
+
+        Args: 
+            sql_session (sqlalchemy.orm.Session): Your open SQLAlchemy Session
+            track (TrackData): The data of the track you want to search for
+
+        Returns:
+            Optional[Tracks]: A ORM Track row with matching data, or None
+        """
         if track.spotify_id is not None:
             existing_track = session.query(Tracks).filter_by(spotify_id=track.spotify_id).first()
         elif track.filepath is not None:
@@ -100,7 +164,17 @@ class TracksRepository():
         return existing_track
 
     @classmethod
-    def bulk_add_tracks(clc, sql_session: sqlalchemy.orm.Session, track_data_list: set[TrackData]) -> None:
+    def bulk_add_tracks(clc, sql_session: sqlalchemy.orm.Session, track_data_list: Set[TrackData]) -> None:
+        """
+        Adds a set of tracks to the Tracks table in an efficient manner
+
+        Args: 
+            sql_session (sqlalchemy.orm.Session): Your open SQLAlchemy Session
+            track_data_list (Set[TrackData]): The set of TrackData you want to add
+
+        Returns:
+            None
+        """
         # get all of the existing spotify ids of tracks in the database so we can make sure we don't re add them
         existing_spotify_ids = {
             sid 
