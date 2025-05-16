@@ -21,6 +21,7 @@ def add_local_library_to_db(sql_session: sqlalchemy.orm.Session, music_dir: str,
     Args:
         music_dir (str): the directory to add songs from
     """
+    logger.info("Scanning local library...")
 
     for root, _, files in os.walk(music_dir):
         for filename in files:
@@ -37,10 +38,8 @@ def add_local_track_to_db(sql_session: sqlalchemy.orm.Session, filepath: str) ->
     file_track_data = extract_file_metadata(filepath)
 
     if file_track_data is None:
-        logger.info(f"No metadata found in file {filepath}, skipping...")
         file_track_data = TrackData(filepath=filepath, comments="WARNING: Error while extracting metadata. This likely means the file is corrupted or empty")
 
-    logger.info(f"Found track with data: {file_track_data}, adding to database...")
     new_track_row = TracksRepository.add_track(sql_session, file_track_data)
     sql_session.commit()
 

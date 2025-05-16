@@ -225,7 +225,7 @@ class SoulseekDownloader:
     #   - for example, if the new file contains "remix" and the original file does not, we may want to remove it from the results
     #   - currently files are sorted in order of size - this is a mid way to do it 
     #   - we should give more options to the user - file types, size, quality, etc
-    def filter_search_results(self, search_results) -> Optional[List[Dict]]:
+    def filter_search_results(self, search_results, file_extensions: List[str] = ["mp3", "flac"]) -> Optional[List[Dict]]:
         """
         Filters the search results to only include downloadable mp3 and flac files sorted by size
 
@@ -241,22 +241,36 @@ class SoulseekDownloader:
         for result in search_results:
             for file in result["files"]:
                 # this extracts the file extension
-                match = re.search(r'\.([a-zA-Z0-9]+)$', file["filename"])
+                match = re.search(r'\.([a-zA-Z0-9]+)$', file["filename"].lower())
 
                 if match is None:
                     continue
 
                 file_extension = match.group(1)
 
-                if file_extension in ["flac", "mp3"] and result["fileCount"] > 0 and result["hasFreeUploadSlot"] == True:
+                file_conditions = [
+                    result["fileCount"] > 0 and
+                    result["hasFreeUploadSlot"] and
+                    file_extension in file_extensions
+                ]
+
+                if all(file_conditions):
                     relevant_results.append((file, result["username"]))
-                
-        relevant_results.sort(key=lambda candidate : candidate[0]["size"], reverse=True)
+
+        relevant_results.sort(key=lambda result : self._score_file(result[0]), reverse=True)
+
+        filenames = [os.path.basename(file["filename"]) for file, _ in relevant_results]
 
         if len(relevant_results) > 0:
             return relevant_results
         
         return None
+    
+    def _score_file(self, file_data) -> int :
+        filename = os.path.basename(file_data["filename"])
+        score = 0
+
+        return score
 
     def search_file_id_from_filename(self, filename):
         """

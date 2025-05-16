@@ -5,6 +5,8 @@ TODO's (~ roughly in order of importance):
       - only call sql_session.commit() after a meaningful unit of work - atomicity
       - we should also be wrapping ALL database operations in a try-except block, and calling sql_session.rollback() if we catch an exception
       - we should prolly also remove the UserInfo table and stop storing api keys in the database lol
+      - make BaseRepository class that all other repository classes inherit from
+          - database interaction event for better cli updates
   - better search and selection for soulseek AND yt-dlp given song title and artist
   - better USER INTERFACE - GUI 
       - we should keep a cli but make it better, the long flags are annoying as fuck
