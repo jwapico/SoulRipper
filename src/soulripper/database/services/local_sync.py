@@ -22,13 +22,12 @@ def add_local_library_to_db(sql_session: sqlalchemy.orm.Session, music_dir: str,
         music_dir (str): the directory to add songs from
     """
 
-    for root, dirs, files in os.walk(music_dir):
+    for root, _, files in os.walk(music_dir):
         for filename in files:
             file_extension = os.path.splitext(filename)[1]
             if file_extension in valid_extensions:
                 filepath = os.path.abspath(os.path.join(root, filename))
                 add_local_track_to_db(sql_session, filepath)
-                sql_session.commit()
 
 def add_local_track_to_db(sql_session: sqlalchemy.orm.Session, filepath: str) -> Optional[Tracks]:
     if not os.path.exists(filepath):
@@ -42,5 +41,7 @@ def add_local_track_to_db(sql_session: sqlalchemy.orm.Session, filepath: str) ->
         file_track_data = TrackData(filepath=filepath, comments="WARNING: Error while extracting metadata. This likely means the file is corrupted or empty")
 
     logger.info(f"Found track with data: {file_track_data}, adding to database...")
+    new_track_row = TracksRepository.add_track(sql_session, file_track_data)
+    sql_session.commit()
 
-    return TracksRepository.add_track(sql_session, file_track_data)
+    return new_track_row

@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import List
 
-# immutable dataclass containing all the configuration data our app needs
+# dataclass containing all the configuration data our app needs
 @dataclass()
 class AppParams:
     output_path: str

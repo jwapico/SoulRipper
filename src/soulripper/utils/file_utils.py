@@ -9,7 +9,7 @@ from soulripper.utils.app_params import AppParams
 
 logger = logging.getLogger(__name__)
 
-# TODO: look at metadata to see what else we can extract - it's different for each file :( - need to find file with great metadata as example
+# TODO: look at metadata to see what else we can extract - it's different for each file type :( - prolly documentation on the internet but will require more logic
 def extract_file_metadata(filepath: str) -> Optional[TrackData]:
     """
     Extracts metadata from a file using mutagen
@@ -18,39 +18,48 @@ def extract_file_metadata(filepath: str) -> Optional[TrackData]:
         filepath (str): the path to the file
 
     Returns:
-        dict: a dictionary of metadata
+        Optional[TrackData]: The extracted TrackData, or None
     """
-
     try:
         file_metadata = mutagen._file.File(filepath)
+
+        if file_metadata:
+            title = file_metadata.get("title", [None])[0]
+            artists = file_metadata.get("artist", [None])[0]
+            album = file_metadata.get("album", [None])[0]
+            release_date = file_metadata.get("date", [None])[0]
+
+            return TrackData(
+                filepath=filepath,
+                title=title,
+                artists=[(artist, None) for artist in artists.split(",")] if artists else [],
+                album=album,
+                release_date=release_date,
+                spotify_id=None,
+                explicit=None,
+                comments=None
+            )
+        
     except Exception as e:
         logger.error(f"Error reading metadata of file {filepath}: {e}")
         return None
 
-    if file_metadata:
-        title = file_metadata.get("title", [None])[0]
-        artists = file_metadata.get("artist", [None])[0]
-        album = file_metadata.get("album", [None])[0]
-        release_date = file_metadata.get("date", [None])[0]
-
-        track_data = TrackData(
-            filepath=filepath,
-            title=title,
-            artists=[(artist, None) for artist in artists.split(",")] if artists else [],
-            album=album,
-            release_date=release_date,
-            spotify_id=None,
-            explicit=None,
-            comments=None
-        )
-
-        return track_data
 
 def save_json(data, filename="debug/debug.json"):
     with open(f"debug/{filename}", "w") as file:
         json.dump(data, file)
 
 def extract_app_params(config_filepath: str) -> AppParams:
+    """
+    Extracts an AppParams object from a .yaml config file
+
+    Args:
+        config_filepath (str): The path to a .yaml file
+
+    Returns: 
+        AppParams: dataclass instance containing all extracted app params
+    """
+
     with open(config_filepath, "r") as file:
         config = yaml.safe_load(file)
 

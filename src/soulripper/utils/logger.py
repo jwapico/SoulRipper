@@ -2,6 +2,16 @@ import logging
 import sys
 
 def init_logger(log_filepath: str, log_level: int, db_echo: bool, silence_other_packages: bool = True):
+    """
+    Initializes a logger for soulripper using the logging package. Is accessed with `logger = logging.getLogger(__name__)`
+
+    Args:
+        log_filepath (str): The output path of the log file
+        log_level (int): The desired log level
+        db_echo (bool): Whether or not to silence sqlalchemy logs
+        silence_other_packages (bool): Whether or not to silence logs from other packages
+    """
+
     logging.basicConfig(
         level=log_level,
         format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',

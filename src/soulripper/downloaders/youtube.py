@@ -4,6 +4,8 @@ import re
 
 logger = logging.getLogger(__name__)
 
+# TODO: parse the stdout output and publish download events
+
 # TODO: need to embed metadata into the file after it downloads
 def download_track_ytdlp(search_query: str, output_path: str) -> str :
     """

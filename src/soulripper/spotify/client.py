@@ -1,14 +1,10 @@
-from datetime import datetime
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 from dataclasses import dataclass
-from dateutil.parser import isoparse
 from typing import Tuple, List, Optional, Dict
 import logging
 import time
 import re
-
-from soulripper.database.schemas import TrackData
 
 logger = logging.getLogger(__name__)
 
@@ -146,34 +142,3 @@ class SpotifyClient():
 
         if profile:
             return (profile["id"], profile["display_name"])
-    
-    def get_track_data_from_playlist(self, tracks: List[Dict]) -> List[Tuple[TrackData, datetime]]:
-        relevant_data = []
-        for track in tracks:
-            if track["track"] is None:
-                logger.warning(f"track field of spotify track empty for some reason, skipping...\nempty data: {track}")
-                continue
-
-            spotify_id = track["track"]["id"]
-            title = track["track"]["name"]
-            artists = [(artist["name"], artist["id"]) for artist in track["track"]["artists"]]
-            album = track["track"]["album"]["name"]
-            release_date = track["track"]["album"]["release_date"]
-            explicit = track["track"]["explicit"]
-            track_added_date = track["added_at"]
-            track_added_date = isoparse(track_added_date)
-
-            track_data = TrackData(
-                spotify_id=spotify_id,
-                title=title,
-                artists=artists,
-                album=album,
-                release_date=release_date if release_date != "" else None,
-                explicit=explicit,
-                filepath=None,
-                comments=None
-            )
-
-            relevant_data.append((track_data, track_added_date))
-        
-        return relevant_data

@@ -4,10 +4,9 @@ import logging
 import datetime
 import os
 
-from soulripper.database.services import update_db_with_spotify_liked_tracks
+from soulripper.database.services import update_db_with_spotify_liked_tracks, get_track_data_from_playlist
 from soulripper.database.repositories import TracksRepository, PlaylistsRepository, ArtistsRepository
 from soulripper.database.schemas import TrackData
-
 from soulripper.spotify import SpotifyClient
 from soulripper.downloaders import SoulseekDownloader, download_track_ytdlp
 
@@ -79,7 +78,7 @@ def download_liked_songs(slskd_client: SoulseekDownloader, spotify_client: Spoti
 # TODO: bruhhhhhhhhhhh the spotify api current_user_saved_tracks() function doesn't return local files FUCK SPOTIFYU there has to be a workaround
 def download_liked_tracks_from_spotify_data(slskd_client: SoulseekDownloader, spotify_client: SpotifyClient, sql_session, output_path: str):
     liked_tracks_data = spotify_client.get_liked_tracks()
-    relevant_tracks_data: List[Tuple[TrackData, datetime.datetime]] = spotify_client.get_track_data_from_playlist(liked_tracks_data)
+    relevant_tracks_data: List[Tuple[TrackData, datetime.datetime]] = get_track_data_from_playlist(liked_tracks_data)
 
     track_rows_and_data = []
     for track, _ in relevant_tracks_data:
@@ -110,7 +109,7 @@ def download_playlist_from_spotify_url(slskd_client: SoulseekDownloader, spotify
         output_path = os.path.join(output_path, playlist_info["name"])
         os.makedirs(output_path, exist_ok=True)
 
-        relevant_tracks_data: List[Tuple[TrackData, datetime.datetime]] = spotify_client.get_track_data_from_playlist(playlist_tracks)
+        relevant_tracks_data: List[Tuple[TrackData, datetime.datetime]] = get_track_data_from_playlist(playlist_tracks)
 
         track_rows_and_data = []
         for track_data, _ in relevant_tracks_data:
