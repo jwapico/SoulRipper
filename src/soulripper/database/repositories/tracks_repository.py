@@ -96,7 +96,6 @@ class TracksRepository():
                 track_artist_assoc = TrackArtists(track_id=track_row.id, artist_id=existing_artist.id)
                 if existing_artist.spotify_id is None and spotify_id is not None:
                     existing_artist.spotify_id = spotify_id
-                    print("temp\n\n")
 
             track_row.track_artists.append(track_artist_assoc)
             sql_session.flush()
