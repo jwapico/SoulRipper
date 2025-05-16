@@ -64,6 +64,10 @@ class CLIOrchestrator():
         args = self.parse_cmdline_args()
         DROP_DATABASE = args.drop_database
 
+        # TODO: experiment with this in and out of async function to see if things are dramatically faster inside
+        # populate the database with metadata found from files in the users output directory
+        add_local_library_to_db(self._sql_session, self._app_params.output_path, self._app_params.valid_music_extensions)
+
         # if the flag was provided drop everything in the database
         if DROP_DATABASE:
             input("Warning: This will drop all tables in the database. Press enter to continue...")
@@ -74,10 +78,6 @@ class CLIOrchestrator():
 
         # initialize the tables defined in souldb.py
         Base.metadata.create_all(self._db_engine)
-
-        # TODO: experiment with this in and out of async function to see if things are dramatically faster inside
-        # populate the database with metadata found from files in the users output directory
-        add_local_library_to_db(self._sql_session, self._app_params.output_path, self._app_params.valid_music_extensions)
 
         # now enter our main logic from an async function
         asyncio.run(self.async_run(args=args))
