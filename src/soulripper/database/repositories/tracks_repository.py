@@ -1,4 +1,4 @@
-from typing import Optional, List, Set
+from typing import Optional, List, Tuple
 import sqlalchemy.orm
 import sqlalchemy.exc
 import logging
@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 class TracksRepository():
     @classmethod
-    def get_track_from_id(clc, sql_session: sqlalchemy.orm.Session, track_id: int) -> Optional[Tracks]:
+    def get_track_from_id(cls, sql_session: sqlalchemy.orm.Session, track_id: int) -> Optional[Tracks]:
         """
         Gets an ORM Tracks row from a track id
 
@@ -27,7 +27,7 @@ class TracksRepository():
             return None
         
     @classmethod
-    def search_tracks_by_title(clc, sql_session: sqlalchemy.orm.Session, track_title: str) -> Optional[List[Tracks]]:
+    def search_tracks_by_title(cls, sql_session: sqlalchemy.orm.Session, track_title: str) -> Optional[List[Tracks]]:
         """
         Gets an ORM Tracks row from a track id
 
@@ -44,7 +44,7 @@ class TracksRepository():
             return None
 
     @classmethod
-    def add_track(clc, sql_session: sqlalchemy.orm.Session, track_data: TrackData) -> Optional[Tracks]:
+    def add_track(cls, sql_session: sqlalchemy.orm.Session, track_data: TrackData) -> Optional[Tracks]:
         """
         Adds a new track to the Tracks table
 
@@ -56,7 +56,7 @@ class TracksRepository():
             Optional[Tracks]: The new ORM Tracks row, or None
         """
         # if there is an existing track, return that
-        existing_track = clc.get_existing_track(sql_session, track_data)
+        existing_track = cls.get_existing_track(sql_session, track_data)
         if existing_track:
             return existing_track
         
@@ -76,23 +76,33 @@ class TracksRepository():
 
         # add artists to the Artist table if they don't already exist, and add associations to the TrackArtist table
         if track_data.artists is not None:
-            for name, spotify_id in track_data.artists:
-                existing_artist = sql_session.query(Artists).filter_by(name=name).first()
-
-                if existing_artist is None:
-                    new_artist = Artists(name=name, spotify_id=spotify_id)
-                    sql_session.add(new_artist)
-                    sql_session.flush()
-                    track_artist_assoc = TrackArtists(track_id=track.id, artist_id=new_artist.id)
-                else:
-                    track_artist_assoc = TrackArtists(track_id=track.id, artist_id=existing_artist.id)
-
-                track.track_artists.append(track_artist_assoc)
+            cls.add_track_artists(sql_session, track, track_data.artists)
 
         return track
+    
+    @classmethod 
+    def add_track_artists(cls, sql_session: sqlalchemy.orm.Session, track_row: Tracks,  artists: List[Tuple[str, Optional[str]]]):
+        for name, spotify_id in artists:
+            existing_artist = sql_session.query(Artists).filter_by(name=name).first()
+
+            # if there is not already an Artists row with an identical name, create a new row and assoc
+            if existing_artist is None:
+                new_artist = Artists(name=name, spotify_id=spotify_id)
+                sql_session.add(new_artist)
+                sql_session.flush()
+                track_artist_assoc = TrackArtists(track_id=track_row.id, artist_id=new_artist.id)
+            else:
+                # if there is an existing Artist with an idenctical name, create an assoc and update the spotify_id if necessary
+                track_artist_assoc = TrackArtists(track_id=track_row.id, artist_id=existing_artist.id)
+                if existing_artist.spotify_id is None and spotify_id is not None:
+                    existing_artist.spotify_id = spotify_id
+                    print("temp\n\n")
+
+            track_row.track_artists.append(track_artist_assoc)
+            sql_session.flush()
 
     @classmethod
-    def modify_track(clc, sql_session: sqlalchemy.orm.Session, track_id: int, new_track_data: TrackData) -> None:
+    def modify_track(cls, sql_session: sqlalchemy.orm.Session, track_id: int, new_track_data: TrackData) -> None:
         """
         Modifies a track in the Tracks table with new TrackData
 
@@ -118,7 +128,7 @@ class TracksRepository():
         sql_session.flush()
 
     @classmethod
-    def remove_track(clc, sql_session: sqlalchemy.orm.Session, track_id: int) -> bool :
+    def remove_track(cls, sql_session: sqlalchemy.orm.Session, track_id: int) -> bool :
         """
         Removes a track from the Tracks table 
 
@@ -143,7 +153,7 @@ class TracksRepository():
         
     # TODO: We need a better way of checking for existing tracks when spotify_id and filepath is None
     @classmethod
-    def get_existing_track(clc, session: sqlalchemy.orm.Session, track: TrackData) -> Optional[Tracks]:
+    def get_existing_track(cls, session: sqlalchemy.orm.Session, track: TrackData) -> Optional[Tracks]:
         """
         Gets an existing track from the Tracks table. First searches by spotify_id, then by filepath, then by title and album. 
 
@@ -164,7 +174,7 @@ class TracksRepository():
         return existing_track
 
     @classmethod
-    def bulk_add_tracks(clc, sql_session: sqlalchemy.orm.Session, track_data_list: Set[TrackData]) -> None:
+    def bulk_add_tracks(cls, sql_session: sqlalchemy.orm.Session, track_data_list: List[TrackData]) -> None:
         """
         Adds a set of tracks to the Tracks table in an efficient manner
 
@@ -187,7 +197,7 @@ class TracksRepository():
         }
 
         # build a list of new_tracks which are not already present in the database/found in the dicts above 
-        new_tracks = []
+        new_tracks: List[TrackData] = []
         for track_data in track_data_list:
             if track_data.spotify_id is None:
                 key = (track_data.title, track_data.album, track_data.filepath)

@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 class PlaylistsRepository():
     @classmethod
-    def get_playlist_by_spotify_id(clc, sql_session: sqlalchemy.orm.Session, spotify_id: str) -> Optional[Playlists]:
+    def get_playlist_by_spotify_id(cls, sql_session: sqlalchemy.orm.Session, spotify_id: str) -> Optional[Playlists]:
         """
         Gets an ORM Playlists row from spotify_id
 
@@ -30,7 +30,7 @@ class PlaylistsRepository():
             return None
         
     @classmethod
-    def search_for_playlist_by_title(clc, sql_session: sqlalchemy.orm.Session, playlist_name: str) -> Optional[Playlists]:
+    def search_for_playlist_by_title(cls, sql_session: sqlalchemy.orm.Session, playlist_name: str) -> Optional[Playlists]:
         """
         Gets an ORM Playlists row searching by playlist name
 
@@ -47,7 +47,7 @@ class PlaylistsRepository():
             return None
     
     @classmethod
-    def get_playlist_track_rows(clc, sql_session: sqlalchemy.orm.Session, playlist_id: int) -> Optional[List[Tracks]]:
+    def get_playlist_track_rows(cls, sql_session: sqlalchemy.orm.Session, playlist_id: int) -> Optional[List[PlaylistTracks]]:
         """
         Gets a list of ORM Playlists rows from a playlist
 
@@ -61,7 +61,7 @@ class PlaylistsRepository():
         return sql_session.query(PlaylistTracks).filter_by(playlist_id=playlist_id).all()
 
     @classmethod
-    def add_playlist(clc, sql_session: sqlalchemy.orm.Session, spotify_id: str, name: str, description: str) -> Playlists:
+    def add_playlist(cls, sql_session: sqlalchemy.orm.Session, spotify_id: Optional[str], name: str, description: str) -> Playlists:
         """
         Adds a new row to the Playlists table
 
@@ -75,9 +75,10 @@ class PlaylistsRepository():
             Playlists: The new Playlists row
         """
         # if there is an existing playlist with an identical spotify_id or title, return that 
-        existing_playlist = PlaylistsRepository.get_playlist_by_spotify_id(sql_session=sql_session, spotify_id=spotify_id) or PlaylistsRepository.search_for_playlist_by_title(sql_session=sql_session, playlist_name=name)
-        if existing_playlist:
-            return existing_playlist
+        if spotify_id is not None:
+            existing_playlist = PlaylistsRepository.get_playlist_by_spotify_id(sql_session=sql_session, spotify_id=spotify_id) or PlaylistsRepository.search_for_playlist_by_title(sql_session=sql_session, playlist_name=name)
+            if existing_playlist:
+                return existing_playlist
 
         # create, add, flush, and return the new playlist
         new_playlist = Playlists(
@@ -92,7 +93,7 @@ class PlaylistsRepository():
         return new_playlist
 
     @classmethod
-    def add_tracks_to_playlist(clc, sql_session: sqlalchemy.orm.Session, playlist_track_data: List[Tuple[TrackData, datetime.datetime]], playlist_row: Playlists) -> None:
+    def add_tracks_to_playlist(cls, sql_session: sqlalchemy.orm.Session, playlist_track_data: List[Tuple[TrackData, datetime.datetime]], playlist_row: Playlists) -> None:
         """
         Adds a list of tracks (with their added timestamps) to the PlaylistTracks association table
 
@@ -122,15 +123,19 @@ class PlaylistsRepository():
 
             if track_row is None:
                 logger.error(f"couldnt find track in Tracks table even though it should have been bulk added. TrackData: {track_data}")
-                track_row = TracksRepository.add_track(track_data)
+                track_row = TracksRepository.add_track(sql_session, track_data)
 
-            key = (playlist_row.id, track_row.id)
-            if key not in existing_assoc_keys:
-                existing_assoc_keys.add(key)
-                playlist_row.playlist_tracks.append(
-                    PlaylistTracks(
-                        playlist_id=playlist_row.id,
-                        track_id=track_row.id,
-                        added_at=date_added
+            if track_row is not None:
+                key = (playlist_row.id, track_row.id)
+                if key not in existing_assoc_keys:
+                    existing_assoc_keys.add(key)
+                    playlist_row.playlist_tracks.append(
+                        PlaylistTracks(
+                            playlist_id=playlist_row.id,
+                            track_id=track_row.id,
+                            added_at=date_added
+                        )
                     )
-                )
+            else:
+                logger.error(f"track_row was not actually created after calling TracksRepository.add_track() with track_data: {track_data}")
+                continue

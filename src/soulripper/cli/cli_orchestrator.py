@@ -30,7 +30,7 @@ from soulripper.downloaders import (
 logger = logging.getLogger(__name__)
 
 class CLIOrchestrator():
-    def __init__(self, spotify_client: SpotifyClient, sql_session: Session, db_engine: sqla.Engine, soulseek_downloader: SoulseekDownloader, app_params: AppParams = None):
+    def __init__(self, spotify_client: SpotifyClient, sql_session: Session, db_engine: sqla.Engine, soulseek_downloader: SoulseekDownloader, app_params: AppParams):
         self._spotify_client = spotify_client
         self._sql_session = sql_session
         self._db_engine = db_engine
@@ -43,8 +43,8 @@ class CLIOrchestrator():
         self._spinner_running = False
         self._num_found_files: int
 
-        # this is config for the download bar, it forces us to use a context. also length is the length of JUST the bar exluding text so we only set the lenght to 50% terminal size
-        self._download_bar: alive_progress.alive_bar = None
+        # this is config for the download bar, it forces us to use a context
+        self._download_bar = None
         self._download_bar_ctx = None
         self.update_terminal_size()
 
@@ -105,10 +105,9 @@ class CLIOrchestrator():
         # get all playlists from spotify and add them to the database
         if DOWNLOAD_ALL_PLAYLISTS:
             all_playlists_metadata = await asyncio.to_thread(self._spotify_client.get_all_playlists)
-            for playlist_metadata in all_playlists_metadata:
-                await asyncio.to_thread(update_db_with_spotify_playlist, self._sql_session, self._spotify_client, playlist_metadata)
-
-            # TODO: actually download the playlists
+            if all_playlists_metadata:
+                for playlist_metadata in all_playlists_metadata:
+                    await asyncio.to_thread(update_db_with_spotify_playlist, self._sql_session, self._spotify_client, playlist_metadata)
 
         # if the update liked flag is provided, download all liked songs from spotify
         if DOWNLOAD_LIKED:
@@ -182,7 +181,7 @@ class CLIOrchestrator():
     def update_terminal_size(self) -> None:
         """update the length gloal config of alive progress to be the 50% the size of the terminal. For some reason it specefies the length of the bar not the entire text"""
         new_len = os.get_terminal_size().columns - int(os.get_terminal_size().columns / 2)
-        config_handler.set_global(length=new_len, bar='notes')
+        config_handler.set_global(length=new_len, bar='notes') # type: ignore
 
     def parse_cmdline_args(self) -> argparse.Namespace:
         """creates an argparse parser, adds all the arguments, and updates _app_params with parsed values. returns the args"""

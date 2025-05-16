@@ -1,15 +1,16 @@
 import sqlalchemy as sqla
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
 
 # table with info about every single playlist in the library
 class Playlists(Base):
     __tablename__ = "playlists"
-    id = sqla.Column(sqla.Integer, primary_key=True)
-    spotify_id = sqla.Column(sqla.String, nullable=True, unique=True)
-    name = sqla.Column(sqla.String, nullable=False)
-    description = sqla.Column(sqla.String, nullable=True)
-    playlist_tracks = sqla.orm.relationship("PlaylistTracks", back_populates="playlist", cascade="all, delete-orphan")
+    id:                 Mapped[int] = mapped_column(sqla.Integer, primary_key=True)
+    spotify_id:         Mapped[str] = mapped_column(sqla.String, nullable=True, unique=True)
+    name:               Mapped[str] = mapped_column(sqla.String, nullable=False)
+    description:        Mapped[str] = mapped_column(sqla.String, nullable=True)
+    playlist_tracks     = relationship("PlaylistTracks", back_populates="playlist", cascade="all, delete-orphan")
 
     def __repr__(self):
         return (

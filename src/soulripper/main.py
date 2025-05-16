@@ -18,16 +18,26 @@ def main():
 
     # initialize the spotify client from the users api keys and config
     dotenv.load_dotenv()   
-    spotify_user_data = SpotifyUserData(
-        CLIENT_ID=os.getenv("SPOTIFY_CLIENT_ID"), 
-        CLIENT_SECRET=os.getenv("SPOTIFY_CLIENT_SECRET"), 
-        REDIRECT_URI=os.getenv("SPOTIFY_REDIRECT_URI"), 
-        SCOPE=app_params.spotify_scope
-    )
-    spotify_client = SpotifyClient(spotify_user_data)
+    SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
+    SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
+    SPOTIFY_REDIRECT_URI = os.getenv("SPOTIFY_REDIRECT_URI")
+    if SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET and SPOTIFY_REDIRECT_URI:
+        spotify_user_data = SpotifyUserData(
+            CLIENT_ID=SPOTIFY_CLIENT_ID, 
+            CLIENT_SECRET=SPOTIFY_CLIENT_SECRET, 
+            REDIRECT_URI=SPOTIFY_REDIRECT_URI, 
+            SCOPE=app_params.spotify_scope
+        )
+        spotify_client = SpotifyClient(spotify_user_data)
+    else:
+        raise Exception("You need to set SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, and SPOTIFY_REDIRECT_URI in your .env file")
 
     # we communicate with slskd through port 5030, you can visit localhost:5030 to see the web front end. its at slskd:5030 in the docker container though
-    soulseek_downloader = SoulseekDownloader(os.getenv("SLSKD_API_KEY"))
+    SLSKD_API_KEY = os.getenv("SLSKD_API_KEY")
+    if SLSKD_API_KEY:
+        soulseek_downloader = SoulseekDownloader(SLSKD_API_KEY)
+    else:
+        raise Exception("You need to set SLSKD_API_KEY in your .env file")
 
     # create the engine with the local soul.db file and create a session
     db_engine = sqla.create_engine(f"sqlite:///{app_params.database_path}", echo=app_params.db_echo)

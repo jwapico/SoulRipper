@@ -33,41 +33,57 @@ class SpotifyClient():
         )
 
         try:
-            self.USER_ID = self.spotipy_client.current_user()["id"]
-        except Exception as e:
+            current_user = self.spotipy_client.current_user()
+            if current_user:
+                self.USER_ID = current_user["id"]
+            else:
+                raise Exception("Could get the current user for your Spotify credentials. Please double check that you have everything correct.")
+        except spotipy.SpotifyException as e:
             logger.warning(f"Spotify API Error, sleeping... error: {e}")
             time.sleep(1)
 
     def get_playlist_id(self, playlist_name):
-        for playlist in self.get_all_playlists():
-            if playlist["name"] == playlist_name:
-                return playlist["id"]
+        all_playlists = self.get_all_playlists()
+
+        if all_playlists:
+            for playlist in all_playlists:
+                if playlist["name"] == playlist_name:
+                    return playlist["id"]
 
         return -1
 
     def get_all_playlists(self):
         playlists_info = self.spotipy_client.user_playlists(self.USER_ID, limit=1)
-        num_playlists = playlists_info["total"]
 
-        all_playlists = []
-        offset = 0
+        if playlists_info:
+            num_playlists = playlists_info["total"]
 
-        while offset < num_playlists:
-            new_playlists = self.spotipy_client.user_playlists(self.USER_ID, limit=50, offset=offset)
-            all_playlists.extend(new_playlists["items"])
-            offset += 50
+            all_playlists = []
+            offset = 0
 
-        return all_playlists
+            while offset < num_playlists:
+                new_playlists = self.spotipy_client.user_playlists(self.USER_ID, limit=50, offset=offset)
+                if new_playlists:
+                    all_playlists.extend(new_playlists["items"])
+                    offset += 50
+
+            return all_playlists
     
     def get_playlist_info(self, playlist_id):
         playlist_info = self.spotipy_client.playlist(playlist_id)
-        playlist_name = playlist_info["name"]
-        playlist_description = playlist_info["description"]
 
-        return {
-            "name": playlist_name,
-            "description": playlist_description,
-        }
+        if playlist_info:
+            playlist_name = playlist_info["name"]
+            playlist_description = playlist_info["description"]
+
+            return {
+                "name": playlist_name,
+                "description": playlist_description,
+            }
+        
+        else:
+            logger.warning(f"Could not retreive info for playlist with id: {playlist_id}")
+            return None
 
     def get_playlist_tracks(self, playlist_id):
         all_tracks = []
@@ -76,12 +92,15 @@ class SpotifyClient():
         while True:
             try:
                 response = self.spotipy_client.playlist_items(offset=offset, playlist_id=playlist_id)
-                all_tracks.extend(response["items"])
-                offset += 100
 
-                if len(response["items"]) < 100:
-                    break
-            except Exception as e:
+                if response:
+                    all_tracks.extend(response["items"])
+                    offset += 100
+
+                    if len(response["items"]) < 100:
+                        break
+
+            except spotipy.SpotifyException as e:
                 logger.error(f"Spotify error, sleeping and trying again: {e}")
                 time.sleep(5)
                 continue
@@ -105,13 +124,15 @@ class SpotifyClient():
         while True:
             try:
                 response = self.spotipy_client.current_user_saved_tracks(limit=50, offset=offset)
-                all_tracks.extend(response["items"])
-                offset += 50
 
-                if len(response["items"]) < 50:
-                    break
+                if response:
+                    all_tracks.extend(response["items"])
+                    offset += 50
 
-            except Exception as e:
+                    if len(response["items"]) < 50:
+                        break
+
+            except spotipy.SpotifyException as e:
                 logger.error(f"Spotify API error: {e}\nSleeping and retrying...")
                 time.sleep(5)
                 continue
@@ -124,7 +145,8 @@ class SpotifyClient():
     def get_user_info(self):
         profile = self.spotipy_client.current_user()
 
-        return (profile["id"], profile["display_name"])
+        if profile:
+            return (profile["id"], profile["display_name"])
     
     def get_track_data_from_playlist(self, tracks) -> List[Tuple[TrackData, datetime]]:
         relevant_data = []
@@ -148,7 +170,9 @@ class SpotifyClient():
                 artists=artists,
                 album=album,
                 release_date=release_date if release_date != "" else None,
-                explicit=explicit
+                explicit=explicit,
+                filepath=None,
+                comments=None
             )
 
             relevant_data.append((track_data, track_added_date))

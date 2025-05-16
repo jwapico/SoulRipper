@@ -1,4 +1,5 @@
-import mutagen
+import mutagen._file
+from typing import Optional
 import yaml
 import json
 import logging
@@ -9,7 +10,7 @@ from soulripper.utils.app_params import AppParams
 logger = logging.getLogger(__name__)
 
 # TODO: look at metadata to see what else we can extract - it's different for each file :( - need to find file with great metadata as example
-def extract_file_metadata(filepath: str) -> TrackData:
+def extract_file_metadata(filepath: str) -> Optional[TrackData]:
     """
     Extracts metadata from a file using mutagen
 
@@ -21,7 +22,7 @@ def extract_file_metadata(filepath: str) -> TrackData:
     """
 
     try:
-        file_metadata = mutagen.File(filepath)
+        file_metadata = mutagen._file.File(filepath)
     except Exception as e:
         logger.error(f"Error reading metadata of file {filepath}: {e}")
         return None
@@ -35,10 +36,12 @@ def extract_file_metadata(filepath: str) -> TrackData:
         track_data = TrackData(
             filepath=filepath,
             title=title,
-            artists=[(artist, None) for artist in artists.split(",")] if artists else [(None, None)],
+            artists=[(artist, None) for artist in artists.split(",")] if artists else [],
             album=album,
             release_date=release_date,
-            spotify_id=None
+            spotify_id=None,
+            explicit=None,
+            comments=None
         )
 
         return track_data
@@ -79,6 +82,8 @@ def extract_app_params(config_filepath: str) -> AppParams:
             LOG_LEVEL = logging.ERROR
         case "CRITICAL":
             LOG_LEVEL = logging.CRITICAL
+        case _:
+            LOG_LEVEL = logging.INFO
 
     return AppParams(
         output_path=OUTPUT_PATH,

@@ -1,5 +1,5 @@
 import os
-from typing import List
+from typing import List, Optional
 import sqlalchemy.orm
 import logging
 
@@ -28,13 +28,14 @@ def add_local_library_to_db(sql_session: sqlalchemy.orm.Session, music_dir: str,
             if file_extension in valid_extensions:
                 filepath = os.path.abspath(os.path.join(root, filename))
                 add_local_track_to_db(sql_session, filepath)
+                sql_session.commit()
 
-def add_local_track_to_db(sql_session: sqlalchemy.orm.Session, filepath: str) -> Tracks:
+def add_local_track_to_db(sql_session: sqlalchemy.orm.Session, filepath: str) -> Optional[Tracks]:
     if not os.path.exists(filepath):
         logger.warning(f"The file you tried to add ({filepath}) does not exist, skipping...")
-        return
+        return None
 
-    file_track_data: TrackData = extract_file_metadata(filepath)
+    file_track_data = extract_file_metadata(filepath)
 
     if file_track_data is None:
         logger.info(f"No metadata found in file {filepath}, skipping...")

@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import List, Tuple, Optional
 
 @dataclass
 class TrackData:
@@ -15,14 +16,14 @@ class TrackData:
         explicit (bool): whether the track is explicit or not
         comments (str): any comments about the track
     """
-    filepath: str = None
-    spotify_id: str = None
-    title: str = None
-    artists: list[(str, str)] = None
-    album: str = None
-    release_date: str = None
-    explicit: bool = None
-    comments: str = None
+    filepath:       Optional[str]                               = None
+    spotify_id:     Optional[str]                               = None
+    title:          Optional[str]                               = None
+    artists:        Optional[List[Tuple[str, Optional[str]]]]   = None
+    album:          Optional[str]                               = None
+    release_date:   Optional[str]                               = None
+    explicit:       Optional[bool]                              = None
+    comments:       Optional[str]                               = None
 
     def __repr__(self):
         return (

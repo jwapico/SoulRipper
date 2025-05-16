@@ -5,7 +5,7 @@ from ..models import Artists, TrackArtists
 
 class ArtistsRepository:
     @classmethod
-    def get_artists_for_track_id(clc, sql_session: sqlalchemy.orm.Session, track_id: int) -> Optional[List[Artists]]:
+    def get_artists_for_track_id(cls, sql_session: sqlalchemy.orm.Session, track_id: int) -> Optional[List[Artists]]:
         """
         Gets a list of ORM Artist rows that were on a track with track_id 
 

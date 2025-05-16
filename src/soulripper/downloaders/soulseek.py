@@ -1,3 +1,4 @@
+from typing import Optional, Tuple, List, Dict
 import slskd_api
 import logging
 import asyncio
@@ -26,7 +27,7 @@ class SoulseekDownloader:
         self.event_loop: asyncio.AbstractEventLoop
 
     # TODO: the output filename is wrong also ERROR HANDLING
-    def download_track(self, search_query: str, output_path: str, max_retries: int = 5, inactive_download_timeout: int = 10) -> str:       
+    def download_track(self, search_query: str, output_path: str, max_retries: int = 5, inactive_download_timeout: int = 10) -> Optional[str]:       
         """
         Attempts to download a track from soulseek
 
@@ -48,8 +49,8 @@ class SoulseekDownloader:
         
         # attempt to start the download
         download_file_id, download_filepath, download_user = self.start_download(search_results, max_retries)
-        if None in (download_file_id, download_filepath, download_user):
-            logger.info(f"None field returned by attempt_downloads, cannot continue: {(download_file_id, download_filepath, download_user)}")
+        if download_file_id is None or download_filepath is None or download_user is None:
+            logger.warning(f"None field returned by attempt_downloads, cannot continue: {(download_file_id, download_filepath, download_user)}")
             return None
 
         download_filename = re.split(r'[\\/]', download_filepath)[-1]
@@ -72,64 +73,66 @@ class SoulseekDownloader:
         while percent_complete < 100:
             elapsed_time = time.time() - start_time
             slskd_download = self._client.transfers.get_download(download_user, download_file_id)
-            percent_complete = slskd_download["percentComplete"]
+
+            if slskd_download is not None:
+                percent_complete = slskd_download["percentComplete"]
+
+                # TODO: i think this call_soon_threadsafe will be unnecessary once we refactor everything to use async
+                if percent_complete > 0:
+                    self.event_loop.call_soon_threadsafe(
+                        event_bus.emit,
+                        SoulseekDownloadUpdateEvent(
+                            download_file_id=download_file_id,
+                            download_filename=download_filename,
+                            percent_complete=percent_complete
+                        )
+                    )
+
+                # if the download has taken longer than the timeout time AND the download is still at 0%, give up and break
+                # TODO: we prolly need a better way of doing this, what if the download goes stale at 50%? i think there is way to look at transfer rates
+                if elapsed_time > inactive_download_timeout * 60 and percent_complete == 0.0:
+                    logging.info(f'Download was inactive for {inactive_download_timeout} minutes, skipping')
+                    break
+
+                # if something goes wrong on slskd's end an 'exception' field appears in the download - this is bad so we break if this happens
+                if "exception" in slskd_download.keys():
+                    logging.info(f'Exception occured in the soulseek download: {slskd_download["exception"]}')
+                    break
+
+                time.sleep(.1)
+        
+            # move the file from where it was downloaded to the specified output path
+            if slskd_download["state"] == "Completed, Succeeded":
+                # by default slskd places downloads in assets/downloads/<containing folder name of file from user>/<file from user>
+                containing_dir_name = os.path.basename(os.path.dirname(download_filepath.replace("\\", "/")))
+                source_path = os.path.join(f"/home/soulripper/assets/downloads/{containing_dir_name}/{download_filename}")
+                final_filepath = os.path.join(f"{output_path}/{download_filename}")
+
+                if not os.path.exists(source_path):
+                    logger.error(f"SLSKD download state is 'Completed, Succeeded' but the file was not found: {source_path}")
+                    return None
+                
+                shutil.move(source_path, final_filepath)
+            else:
+                logger.info(f"Download failed: {slskd_download['state']}")
+                final_filepath = None
+
+                if slskd_download['state'] == "InProgress":
+                    logger.critical(f"Something very sus has occured, download got to 100 but state is still InProgress. Full slskd_download data: {slskd_download}")
 
             # TODO: i think this call_soon_threadsafe will be unnecessary once we refactor everything to use async
-            if percent_complete > 0:
-                self.event_loop.call_soon_threadsafe(
-                    event_bus.emit,
-                    SoulseekDownloadUpdateEvent(
-                        download_file_id=download_file_id,
-                        download_filename=download_filename,
-                        percent_complete=percent_complete
-                    )
+            self.event_loop.call_soon_threadsafe(
+                event_bus.emit,
+                SoulseekDownloadEndEvent(
+                    download_file_id=download_file_id,
+                    end_state=slskd_download["state"],
+                    final_filepath=final_filepath
                 )
-
-            # if the download has taken longer than the timeout time AND the download is still at 0%, give up and break
-            # TODO: we prolly need a better way of doing this, what if the download goes stale at 50%? i think there is way to look at transfer rates
-            if elapsed_time > inactive_download_timeout * 60 and percent_complete == 0.0:
-                logging.info(f'Download was inactive for {inactive_download_timeout} minutes, skipping')
-                break
-
-            # if something goes wrong on slskd's end an 'exception' field appears in the download - this is bad so we break if this happens
-            if "exception" in slskd_download.keys():
-                logging.info(f'Exception occured in the soulseek download: {slskd_download["exception"]}')
-                break
-
-            time.sleep(.1)
-    
-        # move the file from where it was downloaded to the specified output path
-        if slskd_download["state"] == "Completed, Succeeded":
-            # by default slskd places downloads in assets/downloads/<containing folder name of file from user>/<file from user>
-            containing_dir_name = os.path.basename(os.path.dirname(download_filepath.replace("\\", "/")))
-            source_path = os.path.join(f"/home/soulripper/assets/downloads/{containing_dir_name}/{download_filename}")
-            final_filepath = os.path.join(f"{output_path}/{download_filename}")
-
-            if not os.path.exists(source_path):
-                logger.error(f"SLSKD download state is 'Completed, Succeeded' but the file was not found: {source_path}")
-                return None
-            
-            shutil.move(source_path, final_filepath)
-        else:
-            logger.info(f"Download failed: {slskd_download['state']}")
-            final_filepath = None
-
-            if slskd_download['state'] == "InProgress":
-                logger.critical(f"Something very sus has occured, download got to 100 but state is still InProgress. Full slskd_download data: {slskd_download}")
-
-        # TODO: i think this call_soon_threadsafe will be unnecessary once we refactor everything to use async
-        self.event_loop.call_soon_threadsafe(
-            event_bus.emit,
-            SoulseekDownloadEndEvent(
-                download_file_id=download_file_id,
-                end_state=slskd_download["state"],
-                final_filepath=final_filepath
             )
-        )
 
-        return final_filepath
+            return final_filepath
     
-    def start_download(self, search_results, max_retries):
+    def start_download(self, search_results, max_retries) -> Tuple[Optional[str], Optional[str], Optional[str]]:
         # attempt to download the each best search result until we reach max_retries or we run out of search_results
         for attempt_count, (file_data, file_user) in enumerate(search_results):
             if attempt_count > max_retries:
@@ -149,7 +152,7 @@ class SoulseekDownloader:
         return (None, None, None)
 
     # TODO: better searching - need to extract artist and title from returned search data somehow - maybe from filepath 
-    def search(self, search_query: str) -> list:
+    def search(self, search_query: str) -> Optional[List]:
         """
         Searches for a track on soulseek
 
@@ -222,7 +225,7 @@ class SoulseekDownloader:
     #   - for example, if the new file contains "remix" and the original file does not, we may want to remove it from the results
     #   - currently files are sorted in order of size - this is a mid way to do it 
     #   - we should give more options to the user - file types, size, quality, etc
-    def filter_search_results(self, search_results):
+    def filter_search_results(self, search_results) -> Optional[List[Dict]]:
         """
         Filters the search results to only include downloadable mp3 and flac files sorted by size
 

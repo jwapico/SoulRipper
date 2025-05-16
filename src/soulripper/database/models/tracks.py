@@ -1,4 +1,5 @@
 import sqlalchemy as sqla
+from sqlalchemy.orm import mapped_column, relationship, Mapped
 
 from .base import Base
 
@@ -7,17 +8,17 @@ from .base import Base
 # TODO: i think the date_liked_spotify field is reduntant since we should have a playlist for every track that was liked on spotify with the date added there
 class Tracks(Base):
     __tablename__ = "tracks"
-    id = sqla.Column(sqla.Integer, primary_key=True)
-    spotify_id = sqla.Column(sqla.String, nullable=True, unique=True)
-    filepath = sqla.Column(sqla.String, nullable=True)
-    title = sqla.Column(sqla.String, nullable=True)
-    track_artists = sqla.orm.relationship("TrackArtists", back_populates="track", cascade="all, delete-orphan")
-    artists = sqla.orm.relationship("Artists", secondary="track_artists", viewonly=True)
-    album = sqla.Column(sqla.String, nullable=True)
-    release_date = sqla.Column(sqla.String, nullable=True)
-    explicit = sqla.Column(sqla.Boolean, nullable=True)
-    comments = sqla.Column(sqla.String, nullable=True)
-    playlist_tracks = sqla.orm.relationship("PlaylistTracks", back_populates="track", cascade="all, delete-orphan")
+    id:               Mapped[int] = mapped_column(sqla.Integer, primary_key=True)
+    spotify_id:       Mapped[str] = mapped_column(sqla.String, nullable=True, unique=True)
+    filepath:         Mapped[str] = mapped_column(sqla.String, nullable=True)
+    title:            Mapped[str] = mapped_column(sqla.String, nullable=True)
+    album:            Mapped[str] = mapped_column(sqla.String, nullable=True)
+    release_date:     Mapped[str] = mapped_column(sqla.String, nullable=True)
+    explicit:         Mapped[bool] = mapped_column(sqla.Boolean, nullable=True)
+    comments:         Mapped[str] = mapped_column(sqla.String, nullable=True)
+    playlist_tracks  = relationship("PlaylistTracks", back_populates="track", cascade="all, delete-orphan")
+    track_artists    = relationship("TrackArtists", back_populates="track", cascade="all, delete-orphan")
+    artists          = relationship("Artists", secondary="track_artists", viewonly=True)
 
     def __repr__(self):
         return (

@@ -37,14 +37,15 @@ def download_track_ytdlp(search_query: str, output_path: str) -> str :
     ], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 
     # log and save the output since we need to search it for the filepath
-    for line in iter(process.stdout.readline, ''):
-        line = line.rstrip()
-        if line:
-            logger.info(line)
-            ytdlp_output += line
+    if process.stdout is not None:
+        for line in iter(process.stdout.readline, ''):
+            line = line.rstrip()
+            if line:
+                logger.info(line)
+                ytdlp_output += line
 
-    process.stdout.close()
-    process.wait()
+        process.stdout.close()
+        process.wait()
 
     # this extracts the filepath of the new file from the yt-dlp output, TODO: theres prolly a better way to do this
     file_path_pattern = r'\[EmbedThumbnail\] ffmpeg: Adding thumbnail to "([^"]+)"'

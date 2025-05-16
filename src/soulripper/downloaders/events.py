@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from pyventus.events import AsyncIOEventEmitter
+from typing import Optional
 
 event_bus = AsyncIOEventEmitter(debug=False)
 
@@ -19,7 +20,7 @@ class SoulseekDownloadUpdateEvent:
 class SoulseekDownloadEndEvent:
     download_file_id: str
     end_state: str
-    final_filepath: str
+    final_filepath: Optional[str]
 
 @dataclass
 class SoulseekSearchStartEvent:
