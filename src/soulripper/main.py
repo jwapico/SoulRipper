@@ -11,6 +11,8 @@ from soulripper.spotify import SpotifyClient, SpotifyUserData
 from soulripper.utils import AppParams, extract_app_params, init_logger
 from soulripper.cli import CLIOrchestrator
 
+# TODO: everything async!
+
 def main():
     app_params: AppParams = extract_app_params("/home/soulripper/config.yaml")
 
