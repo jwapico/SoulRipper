@@ -3,7 +3,7 @@ import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 from dataclasses import dataclass
 from dateutil.parser import isoparse
-from typing import Tuple, List
+from typing import Tuple, List, Optional, Dict
 import logging
 import time
 import re
@@ -37,12 +37,13 @@ class SpotifyClient():
             if current_user:
                 self.USER_ID = current_user["id"]
             else:
-                raise Exception("Could get the current user for your Spotify credentials. Please double check that you have everything correct.")
+                raise Exception("Could not get the current user for your Spotify credentials. Please double check that you have everything correct.")
+
         except spotipy.SpotifyException as e:
             logger.warning(f"Spotify API Error, sleeping... error: {e}")
             time.sleep(1)
 
-    def get_playlist_id(self, playlist_name):
+    def get_playlist_id_from_name(self, playlist_name: str) -> Optional[str]:
         all_playlists = self.get_all_playlists()
 
         if all_playlists:
@@ -50,9 +51,7 @@ class SpotifyClient():
                 if playlist["name"] == playlist_name:
                     return playlist["id"]
 
-        return -1
-
-    def get_all_playlists(self):
+    def get_all_playlists(self) -> Optional[List[Dict]]:
         playlists_info = self.spotipy_client.user_playlists(self.USER_ID, limit=1)
 
         if playlists_info:
@@ -69,7 +68,7 @@ class SpotifyClient():
 
             return all_playlists
     
-    def get_playlist_info(self, playlist_id):
+    def get_playlist_info(self, playlist_id: str) -> Optional[Dict[str, str]]:
         playlist_info = self.spotipy_client.playlist(playlist_id)
 
         if playlist_info:
@@ -85,7 +84,7 @@ class SpotifyClient():
             logger.warning(f"Could not retreive info for playlist with id: {playlist_id}")
             return None
 
-    def get_playlist_tracks(self, playlist_id):
+    def get_playlist_tracks(self, playlist_id: str) -> List[Dict]:
         all_tracks = []
         offset = 0
 
@@ -107,7 +106,7 @@ class SpotifyClient():
             
         return all_tracks
 
-    def get_playlist_id_from_url(self, playlist_url: str):
+    def get_playlist_id_from_url(self, playlist_url: str) -> str:
         match = re.search(r"playlist/([a-zA-Z0-9]+)", playlist_url)
             
         if not match:
@@ -117,7 +116,7 @@ class SpotifyClient():
 
         return playlist_id
     
-    def get_liked_tracks(self):
+    def get_liked_tracks(self) -> List[Dict]:
         all_tracks = []
         offset = 0
 
@@ -139,16 +138,16 @@ class SpotifyClient():
             
         return all_tracks
     
-    def get_track(self, id):
+    def get_track(self, id: str) -> Optional[Dict]:
         return self.spotipy_client.track(id)
     
-    def get_user_info(self):
+    def get_user_info(self) -> Optional[Tuple[str, str]]:
         profile = self.spotipy_client.current_user()
 
         if profile:
             return (profile["id"], profile["display_name"])
     
-    def get_track_data_from_playlist(self, tracks) -> List[Tuple[TrackData, datetime]]:
+    def get_track_data_from_playlist(self, tracks: List[Dict]) -> List[Tuple[TrackData, datetime]]:
         relevant_data = []
         for track in tracks:
             if track["track"] is None:
