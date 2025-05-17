@@ -2,12 +2,21 @@ import mutagen._file
 from typing import Optional
 import yaml
 import json
+import re
 import logging
 
 from soulripper.database.schemas import TrackData
 from soulripper.utils.app_params import AppParams
 
 logger = logging.getLogger(__name__)
+
+def get_file_extension(filepath: str) -> Optional[str]:
+    match = re.search(r'\.([a-zA-Z0-9]+)$', filepath.lower())
+
+    if match is None:
+        return
+
+    return match.group(1)
 
 # TODO: look at metadata to see what else we can extract - it's different for each file type :( - prolly documentation on the internet but will require more logic
 def extract_file_metadata(filepath: str) -> Optional[TrackData]:

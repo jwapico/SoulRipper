@@ -2,6 +2,7 @@ from typing import Optional, Tuple, List, Dict
 import slskd_api
 import logging
 import asyncio
+import difflib
 import shutil
 import time
 import os
@@ -16,6 +17,8 @@ from .events import (
     SoulseekSearchEndEvent,
     event_bus
 )
+
+from soulripper.utils.file_utils import get_file_extension
 
 logger = logging.getLogger(__name__)
 
@@ -146,7 +149,7 @@ class SoulseekDownloader:
                 continue
 
             filename = file_data["filename"]
-            file_id = self.search_file_id_from_filename(filename)
+            file_id = self._search_file_id_from_filename(filename)
             return (file_id, filename, file_user)
     
         return (None, None, None)
@@ -202,7 +205,7 @@ class SoulseekDownloader:
         search_results = self._client.searches.search_responses(search_id)
 
         # filter for just relevant results - audio files that are downloadable from the user sorted by quality
-        relevant_results = self.filter_search_results(search_results)
+        relevant_results = self.filter_search_results(search_results, search_query)
         if relevant_results is None:
             logger.info("No relevant results found on Soulseek")
 
@@ -225,7 +228,7 @@ class SoulseekDownloader:
     #   - for example, if the new file contains "remix" and the original file does not, we may want to remove it from the results
     #   - currently files are sorted in order of size - this is a mid way to do it 
     #   - we should give more options to the user - file types, size, quality, etc
-    def filter_search_results(self, search_results, file_extensions: List[str] = ["mp3", "flac"]) -> Optional[List[Dict]]:
+    def filter_search_results(self, search_results, search_query: str, file_extensions: List[str] = ["mp3", "flac"]) -> Optional[List[Dict]]:
         """
         Filters the search results to only include downloadable mp3 and flac files sorted by size
 
@@ -240,39 +243,61 @@ class SoulseekDownloader:
 
         for result in search_results:
             for file in result["files"]:
-                # this extracts the file extension
-                match = re.search(r'\.([a-zA-Z0-9]+)$', file["filename"].lower())
+                file_extension = get_file_extension(file["filename"])
 
-                if match is None:
-                    continue
-
-                file_extension = match.group(1)
-
-                file_conditions = [
+                required_conditions = [
                     result["fileCount"] > 0 and
                     result["hasFreeUploadSlot"] and
                     file_extension in file_extensions
                 ]
 
-                if all(file_conditions):
+                if all(required_conditions):
                     relevant_results.append((file, result["username"]))
 
-        relevant_results.sort(key=lambda result : self._score_file(result[0]), reverse=True)
-
-        filenames = [os.path.basename(file["filename"]) for file, _ in relevant_results]
+        relevant_results.sort(key=lambda result : self._score_file(result[0], search_query, file_extensions), reverse=True)
 
         if len(relevant_results) > 0:
             return relevant_results
         
         return None
     
-    def _score_file(self, file_data) -> int :
-        filename = os.path.basename(file_data["filename"])
+    # TODO: this function could probably be improved quite a bit, the scaling factors are chosen pretty much randomly
+    def _score_file(self, file_data, search_query: str, file_extensions: List[str]) -> int :
+        # extract just the base filename from the data
+        parts = file_data["filename"].replace('\\', '/').split('/')
+        non_empty_parts = [p for p in parts if p.strip() != '']
+        filename = non_empty_parts[-1] if non_empty_parts else ''
+
         score = 0
+
+        # subtract 100 for each disallowed term in the filename
+        disallowed_terms = ["acapella", "instrumental", "intro", "edit", "clean", "remix", "transition", "stems", "club", "radio", "snippet", "sample"]
+        disallowed_terms = [term for term in disallowed_terms if term not in search_query.lower()]
+        for term in disallowed_terms:
+            if term in filename.lower():
+                score -= 100
+
+        # subtract 10 for each random/unnecessary character in the filename
+        clutter_characters = [char for char in "!@#$%^&*()+=[]{}<>|/?;:_-" if char not in search_query]
+        for char in clutter_characters:
+            if char in filename:
+                score -= 10
+
+        # file_extensions are ordered by priority, so we add more to the score for higher priority extensions
+        file_extension = get_file_extension(filename)
+        if file_extension:
+            priority = len(file_extensions) - file_extensions.index(file_extension)
+            score += priority * 25
+
+        # we also prioritize files whose names are close to the search query - SequenceMatcher.ratio() returns a 0-1 similarity score
+        query_clean = search_query.lower().replace('-', ' ').replace('_', ' ')
+        filename_clean = filename.lower().replace('-', ' ').replace('_', ' ')
+        similarity = difflib.SequenceMatcher(None, query_clean, filename_clean).ratio()
+        score += round(similarity * 50)
 
         return score
 
-    def search_file_id_from_filename(self, filename):
+    def _search_file_id_from_filename(self, filename):
         """
         Gets the download object for a file from slskd
 
