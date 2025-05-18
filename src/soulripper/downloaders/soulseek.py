@@ -103,7 +103,8 @@ class SoulseekDownloader:
                     break
 
                 time.sleep(.1)
-        
+
+        if slskd_download is not None:
             # move the file from where it was downloaded to the specified output path
             if slskd_download["state"] == "Completed, Succeeded":
                 # by default slskd places downloads in assets/downloads/<containing folder name of file from user>/<file from user>
@@ -115,6 +116,7 @@ class SoulseekDownloader:
                     logger.error(f"SLSKD download state is 'Completed, Succeeded' but the file was not found: {source_path}")
                     return None
                 
+                os.makedirs(os.path.dirname(final_filepath), exist_ok=True)
                 shutil.move(source_path, final_filepath)
             else:
                 logger.info(f"Download failed: {slskd_download['state']}")
@@ -262,6 +264,9 @@ class SoulseekDownloader:
         return None
     
     # TODO: this function could probably be improved quite a bit, the scaling factors are chosen pretty much randomly
+    # TODO: add heuristic for file quality
+    #   - will be different for different file formats
+    #   - research into file formats will prolly be needed to do this in the best way possible 
     def _score_file(self, file_data, search_query: str, file_extensions: List[str]) -> int :
         # extract just the base filename from the data
         parts = file_data["filename"].replace('\\', '/').split('/')
@@ -271,7 +276,7 @@ class SoulseekDownloader:
         score = 0
 
         # subtract 100 for each disallowed term in the filename
-        disallowed_terms = ["acapella", "instrumental", "intro", "edit", "clean", "remix", "transition", "stems", "club", "radio", "snippet", "sample"]
+        disallowed_terms = ["acapella", "instrumental", "intro", "edit", "clean", "remix", "transition", "stems", "club", "radio", "snippet", "sample", "preview", "karaoke", "cover", "parody", "rework", "bootleg", "mashup"]
         disallowed_terms = [term for term in disallowed_terms if term not in search_query.lower()]
         for term in disallowed_terms:
             if term in filename.lower():

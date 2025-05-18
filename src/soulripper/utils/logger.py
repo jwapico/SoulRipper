@@ -1,5 +1,6 @@
 import logging
 import sys
+import os
 
 def init_logger(log_filepath: str, log_level: int, db_echo: bool, silence_other_packages: bool = True):
     """
@@ -11,6 +12,11 @@ def init_logger(log_filepath: str, log_level: int, db_echo: bool, silence_other_
         db_echo (bool): Whether or not to silence sqlalchemy logs
         silence_other_packages (bool): Whether or not to silence logs from other packages
     """
+    # create the file if it doesn't already exist
+    if not os.path.exists(log_filepath):
+        os.makedirs(os.path.dirname(log_filepath), exist_ok=True)
+        with open(log_filepath, "x"):
+            pass
 
     logging.basicConfig(
         level=log_level,
