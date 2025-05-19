@@ -8,6 +8,8 @@ import re
 
 logger = logging.getLogger(__name__)
 
+# TODO: spotipy is not async, ideally we rewrite with a different library that is async: https://pypi.org/project/async-spotify/
+
 # immutable dataclass containg the users spotify config information
 @dataclass(frozen=True)
 class SpotifyUserData:

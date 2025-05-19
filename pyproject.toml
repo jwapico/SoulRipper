@@ -21,7 +21,9 @@ dependencies = [
   "rich",
   "pyventus",
   "alive_progress",
-  "python-dateutil"
+  "python-dateutil",
+  "aiosqlite",
+  "greenlet"
 ]
 
 [project.urls]

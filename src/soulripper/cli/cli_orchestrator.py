@@ -1,6 +1,7 @@
 import sqlalchemy as sqla
 from sqlalchemy.orm import Session
 from pyventus.events import EventLinker
+from sqlalchemy.ext.asyncio import AsyncSession, AsyncEngine
 import alive_progress
 from alive_progress import config_handler
 import logging
@@ -30,9 +31,9 @@ from soulripper.downloaders import (
 logger = logging.getLogger(__name__)
 
 class CLIOrchestrator():
-    def __init__(self, spotify_client: SpotifyClient, sql_session: Session, db_engine: sqla.Engine, soulseek_downloader: SoulseekDownloader, app_params: AppParams):
+    def __init__(self, spotify_client: SpotifyClient, db_session_maker, db_engine, soulseek_downloader: SoulseekDownloader, app_params: AppParams):
         self._spotify_client = spotify_client
-        self._sql_session = sql_session
+        self._db_session_maker = db_session_maker
         self._db_engine = db_engine
         self._soulseek_downloader = soulseek_downloader
         self._app_params = app_params
@@ -58,32 +59,36 @@ class CLIOrchestrator():
         EventLinker.on(SoulseekSearchUpdateEvent)(self._on_soulseek_search_update)
         EventLinker.on(SoulseekSearchEndEvent)(self._on_soulseek_search_end)
 
-    def run(self):
+    async def run(self):
         """Spins up a new asyncio coroutine that manages the CLI - also executes some database initialization steps"""
 
         args = self.parse_cmdline_args()
         DROP_DATABASE = args.drop_database
 
-
         # if the flag was provided drop everything in the database, only scan the local library if we did not drop the database
         if DROP_DATABASE:
             input("Warning: This will drop all tables in the database. Press enter to continue...")
 
-            metadata = sqla.MetaData()
-            metadata.reflect(bind=self._db_engine)
-            metadata.drop_all(self._db_engine)
+            async with self._db_engine.begin() as conn:
+                metadata = sqla.MetaData()
+                await conn.run_sync(metadata.reflect, self._db_engine)
+                await conn.run_sync(metadata.drop_all)
+
         else:
             # TODO: experiment with this in and out of async function to see if things are dramatically faster inside
             # populate the database with metadata found from files in the users output directory
-            add_local_library_to_db(self._sql_session, self._app_params.output_path, self._app_params.valid_music_extensions)
-
-        # initialize the tables defined in souldb.py
-        Base.metadata.create_all(self._db_engine)
+            async with self._db_session_maker() as session:
+                await asyncio.to_thread(
+                    add_local_library_to_db,
+                    session,
+                    self._app_params.output_path,
+                    self._app_params.valid_music_extensions
+                )
 
         # now enter our main logic from an async function
-        asyncio.run(self.async_run(args=args))
+        await self.handle_commands(args=args)
 
-    async def async_run(self, args: argparse.Namespace):
+    async def handle_commands(self, args: argparse.Namespace):
         """executes different code depending on the passed in args"""
 
         # connect the downloader to the event loop - TODO: i think this will be unnecessary once we refactor everything to use async
@@ -97,7 +102,8 @@ class CLIOrchestrator():
         NEW_TRACK_FILEPATH = args.add_track
 
         if NEW_TRACK_FILEPATH:
-            await asyncio.to_thread(add_local_track_to_db, self._sql_session, NEW_TRACK_FILEPATH)
+            async with self._db_session_maker() as session:
+                await asyncio.to_thread(add_local_track_to_db, session, NEW_TRACK_FILEPATH)
 
         if SEARCH_QUERY:
             output_path = await asyncio.to_thread(download_from_search_query, self._soulseek_downloader, SEARCH_QUERY, self._app_params.output_path, self._app_params.youtube_only, self._app_params.max_download_retries)
@@ -108,16 +114,19 @@ class CLIOrchestrator():
             all_playlists_metadata = await asyncio.to_thread(self._spotify_client.get_all_playlists)
             if all_playlists_metadata:
                 for playlist_metadata in all_playlists_metadata:
-                    await asyncio.to_thread(update_db_with_spotify_playlist, self._sql_session, self._spotify_client, playlist_metadata)
+                    async with self._db_session_maker() as session:
+                        await asyncio.to_thread(update_db_with_spotify_playlist, session, self._spotify_client, playlist_metadata)
 
         # if the update liked flag is provided, download all liked songs from spotify
         if DOWNLOAD_LIKED:
-            await asyncio.to_thread(download_liked_songs, self._soulseek_downloader, self._spotify_client, self._sql_session, self._app_params.output_path, self._app_params.youtube_only)
+            async with self._db_session_maker() as session:
+                await asyncio.to_thread(download_liked_songs, self._soulseek_downloader, self._spotify_client, session, self._app_params.output_path, self._app_params.youtube_only)
         
         # if a playlist url is provided, download the playlist
         # TODO: refactor this function
         if SPOTIFY_PLAYLIST_URL:
-            await asyncio.to_thread(download_playlist_from_spotify_url, self._soulseek_downloader, self._spotify_client, self._sql_session, SPOTIFY_PLAYLIST_URL, self._app_params.output_path)
+            async with self._db_session_maker() as session:
+                await asyncio.to_thread(download_playlist_from_spotify_url, self._soulseek_downloader, self._spotify_client, session, SPOTIFY_PLAYLIST_URL, self._app_params.output_path)
 
     async def _on_soulseek_search_start(self, event: SoulseekSearchStartEvent):
         """initializes a new earth spinner and does some printing"""

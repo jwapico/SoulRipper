@@ -1,6 +1,5 @@
-from sqlalchemy.orm import Session
-import sqlalchemy as sqla
-import sqlalchemy.orm
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+import asyncio
 import sys
 import os
 import dotenv
@@ -13,7 +12,7 @@ from soulripper.cli import CLIOrchestrator
 
 # TODO: everything async!
 
-def main():
+async def main():
     app_params: AppParams = extract_app_params("/home/soulripper/config.yaml")
 
     init_logger(app_params.log_filepath, app_params.log_level, app_params.db_echo)
@@ -42,24 +41,24 @@ def main():
         raise Exception("You need to set SLSKD_API_KEY in your .env file")
 
     # create the engine with the local soul.db file and create a session
-    db_engine = sqla.create_engine(f"sqlite:///{app_params.database_path}", echo=app_params.db_echo)
-    sessionmaker = sqlalchemy.orm.sessionmaker(bind=db_engine)
-    sql_session: Session = sessionmaker()
+    db_engine = create_async_engine(f"sqlite+aiosqlite:///{app_params.database_path}", echo=app_params.db_echo)
+    async_session_maker: async_sessionmaker[AsyncSession] = async_sessionmaker(bind=db_engine, expire_on_commit=False, class_=AsyncSession)
 
     # initialize the tables defined in souldb.py
-    Base.metadata.create_all(db_engine)
+    async with db_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
     # if any cmdline arguments were passed, run the CLI Orchestrator
     if len(sys.argv) > 1:
         cli_orchestrator = CLIOrchestrator(
             spotify_client=spotify_client, 
-            sql_session=sql_session,
+            db_session_maker=async_session_maker,
             db_engine=db_engine,
             soulseek_downloader=soulseek_downloader, 
             app_params=app_params
         )
 
-        cli_orchestrator.run()
+        await cli_orchestrator.run()
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
