@@ -16,7 +16,7 @@ async def update_db_with_spotify_playlist(sql_session: AsyncSession, spotify_cli
     logger.info(f"Updating database with tracks from playlist {spotify_playlist_metadata['name']}...")
 
     # get the TrackData for the playlist
-    playlist_tracks = spotify_client.get_playlist_tracks(spotify_playlist_metadata['id'])
+    playlist_tracks = await spotify_client.get_playlist_tracks(spotify_playlist_metadata['id'])
     relevant_tracks_data: List[Tuple[TrackData, datetime.datetime]] = get_track_data_from_playlist(playlist_tracks)
 
     # create the playlist row
@@ -29,7 +29,7 @@ async def update_db_with_spotify_playlist(sql_session: AsyncSession, spotify_cli
 # TODO: this function takes a while to run, we should find a way to check if there any changes before calling it
 async def update_db_with_spotify_liked_tracks(spotify_client: SpotifyClient, sql_session: AsyncSession) -> Optional[Playlists]:
     # get the TrackData for the users liked tracks
-    liked_tracks_data = spotify_client.get_liked_tracks()
+    liked_tracks_data = await spotify_client.get_liked_tracks()
     relevant_tracks_data: List[Tuple[TrackData, datetime.datetime]] = get_track_data_from_playlist(liked_tracks_data)
 
     # create the playlist row

@@ -102,7 +102,7 @@ class CLIOrchestrator():
 
         # get all playlists from spotify and add them to the database
         if DOWNLOAD_ALL_PLAYLISTS:
-            all_playlists_metadata = await asyncio.to_thread(self._spotify_client.get_all_playlists)
+            all_playlists_metadata = await self._spotify_client.get_all_playlists()
             if all_playlists_metadata:
                 for playlist_metadata in all_playlists_metadata:
                     async with self._db_session_maker() as session:

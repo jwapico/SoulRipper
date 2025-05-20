@@ -42,8 +42,7 @@ TODO's (~ roughly in order of importance):
           - we should make sure we have the back end right before we start on the front end
   - cache spotify api data so we dont have to retreive ALL of it every time
       - talk to colton eoghan and other potential users about high level design
-  - youtube playlist functionality
-      - https://developers.google.com/youtube/v3/docs/playlists/list
+      - we also need to rewrite the SpotifyClient class to use an async library [async-spotify](https://pypi.org/project/async-spotify/) or write our own library with [aiohttp](https://pypi.org/project/aiohttp/)
   - refactor date_liked_spotify out of the Tracks table, can get this info by looking at the date_added field of the SPOTIFY_LIKED_SONGS playlist
       - although maybe we should keep it as a dedicated field if we feel that it is used often enough, running search queries each time could be cumbersome
   - restructure this file - there are too many random ahh functions
@@ -64,5 +63,7 @@ TODO's (~ roughly in order of importance):
   - better print statements in download and search functions - should track progress (look at slskd data) instead of printing the state on a new line each time lol
   - type annotations for ALL functions args and return values
   - cleanup comments & add more
+  - youtube playlist functionality
+      - https://developers.google.com/youtube/v3/docs/playlists/list
 
   - this list is getting long as shit lmfao

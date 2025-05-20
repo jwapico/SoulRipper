@@ -77,7 +77,7 @@ async def download_liked_songs(slskd_client: SoulseekDownloader, spotify_client:
     
 # TODO: bruhhhhhhhhhhh the spotify api current_user_saved_tracks() function doesn't return local files FUCK SPOTIFYU there has to be a workaround
 async def download_liked_tracks_from_spotify_data(slskd_client: SoulseekDownloader, spotify_client: SpotifyClient, sql_session: AsyncSession, output_path: str):
-    liked_tracks_data = spotify_client.get_liked_tracks()
+    liked_tracks_data = await spotify_client.get_liked_tracks()
     relevant_tracks_data: List[Tuple[TrackData, datetime.datetime]] = get_track_data_from_playlist(liked_tracks_data)
 
     track_rows_and_data = []
@@ -101,9 +101,9 @@ async def download_playlist_from_spotify_url(slskd_client: SoulseekDownloader, s
         output_path (str): the directory to download the songs to
     """
 
-    playlist_id = spotify_client.get_playlist_id_from_url(playlist_url)
-    playlist_tracks = spotify_client.get_playlist_tracks(playlist_id)
-    playlist_info = spotify_client.get_playlist_info(playlist_id)
+    playlist_id = spotify_client.extract_playlist_id_from_url(playlist_url)
+    playlist_tracks = await spotify_client.get_playlist_tracks(playlist_id)
+    playlist_info = await spotify_client.get_playlist_info(playlist_id)
 
     if playlist_info:
         output_path = os.path.join(output_path, playlist_info["name"])

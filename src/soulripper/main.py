@@ -11,6 +11,7 @@ from soulripper.utils import AppParams, extract_app_params, init_logger
 from soulripper.cli import CLIOrchestrator
 
 # TODO: everything async!
+# TODO: we can probably push off some init stuff until we know we need it
 
 async def main():
     app_params: AppParams = extract_app_params("/home/soulripper/config.yaml")
@@ -29,7 +30,7 @@ async def main():
             REDIRECT_URI=SPOTIFY_REDIRECT_URI, 
             SCOPE=app_params.spotify_scope
         )
-        spotify_client = SpotifyClient(spotify_user_data)
+        spotify_client = await SpotifyClient.init(spotify_user_data)
     else:
         raise Exception("You need to set SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, and SPOTIFY_REDIRECT_URI in your .env file")
 
