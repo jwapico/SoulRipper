@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 # TODO: a lot of this code (and sync services) need to be refactored
 
-def download_from_search_query(slskd_client: SoulseekDownloader, search_query: str, output_path: str, youtube_only: bool = False, max_retries: int = 5) -> str:
+async def download_from_search_query(slskd_client: SoulseekDownloader, search_query: str, output_path: str, youtube_only: bool = False, max_retries: int = 5) -> str:
     """
     Downloads a track from soulseek or youtube, only downloading from youtube if the query is not found on soulseek
 
@@ -26,12 +26,12 @@ def download_from_search_query(slskd_client: SoulseekDownloader, search_query: s
         str: the path to the downloaded file
     """
     if youtube_only:
-        return download_track_ytdlp(search_query, output_path)
+        return await download_track_ytdlp(search_query, output_path)
 
-    download_path = slskd_client.download_track(search_query, output_path, max_retries)
+    download_path = await slskd_client.download_track(search_query, output_path, max_retries)
 
     if download_path is None:
-        download_path = download_track_ytdlp(search_query, output_path)
+        download_path = await download_track_ytdlp(search_query, output_path)
 
     return download_path
 
@@ -65,7 +65,7 @@ async def download_liked_songs(slskd_client: SoulseekDownloader, spotify_client:
 
                         search_query = f"{track_row.title} - {track_artists}"
 
-                        filepath = download_from_search_query(slskd_client, search_query, output_path, youtube_only)
+                        filepath = await download_from_search_query(slskd_client, search_query, output_path, youtube_only)
                         track_row.filepath = filepath
                         await sql_session.commit()
 
@@ -84,7 +84,7 @@ async def download_liked_tracks_from_spotify_data(slskd_client: SoulseekDownload
     for track, _ in relevant_tracks_data:
         existing_track = await TracksRepository.get_existing_track(sql_session, track)
         if existing_track is None:
-            filepath = download_track(slskd_client, track, output_path)
+            filepath = await download_track(slskd_client, track, output_path)
             track.filepath = filepath
 
             track_row = await TracksRepository.add_track(sql_session, track)
@@ -116,22 +116,22 @@ async def download_playlist_from_spotify_url(slskd_client: SoulseekDownloader, s
             existing_track_row = await TracksRepository.get_existing_track(sql_session, track_data)
             # TODO: need better searching !
             if existing_track_row is None:
-                filepath = download_track(slskd_client, track_data, output_path)
+                filepath = await download_track(slskd_client, track_data, output_path)
                 track_data.filepath = filepath
                 new_track_row = await TracksRepository.add_track(sql_session, track_data)
                 track_rows_and_data.append((new_track_row, track_data))
             else:
                 logger.info(f"Track ({track_data.title} - {track_data.artists}) already exists in the database, skipping download.")
                 if existing_track_row.filepath is None:
-                    existing_track_row.filepath = download_track(slskd_client, track_data, output_path)
+                    existing_track_row.filepath = await download_track(slskd_client, track_data, output_path)
                 track_rows_and_data.append((existing_track_row, track_data))
 
         await PlaylistsRepository.add_playlist(sql_session, playlist_id, playlist_info["name"], playlist_info["description"])
         await sql_session.commit()
 
 # TODO: this is where better search will happen - construct query from trackdata
-def download_track(slskd_client: SoulseekDownloader, track: TrackData, output_path: str) -> str:
+async def download_track(slskd_client: SoulseekDownloader, track: TrackData, output_path: str) -> str:
     artists = ', '.join([artist[0] for artist in track.artists]) if track.artists else ""
     search_query = f"{track.title} - {artists}"
-    download_path = download_from_search_query(slskd_client, search_query, output_path)
+    download_path = await download_from_search_query(slskd_client, search_query, output_path)
     return download_path

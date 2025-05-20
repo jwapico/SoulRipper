@@ -26,11 +26,8 @@ class SoulseekDownloader:
     def __init__(self, api_key: str):
         self._client = slskd_api.SlskdClient("http://slskd:5030", api_key)
 
-        # TODO: i think this will be unnecessary once we refactor everything to use async
-        self.event_loop: asyncio.AbstractEventLoop
-
     # TODO: the output filename is wrong also ERROR HANDLING
-    def download_track(self, search_query: str, output_path: str, max_retries: int = 5, inactive_download_timeout: int = 10) -> Optional[str]:       
+    async def download_track(self, search_query: str, output_path: str, max_retries: int = 5, inactive_download_timeout: int = 10) -> Optional[str]:       
         """
         Attempts to download a track from soulseek
 
@@ -45,13 +42,13 @@ class SoulseekDownloader:
         """
 
         # search slskd using the passed in query
-        search_results = self.search(search_query)
+        search_results = await self.search(search_query)
         if search_results is None:
             logger.info("No results found on Soulseek")
             return None
         
         # attempt to start the download
-        download_file_id, download_filepath, download_user = self.start_download(search_results, max_retries)
+        download_file_id, download_filepath, download_user = await self.start_download(search_results, max_retries)
         if download_file_id is None or download_filepath is None or download_user is None:
             logger.warning(f"None field returned by attempt_downloads, cannot continue: {(download_file_id, download_filepath, download_user)}")
             return None
@@ -59,9 +56,7 @@ class SoulseekDownloader:
         download_filename = re.split(r'[\\/]', download_filepath)[-1]
 
         # now that we are confident the download started successfully, emit a SoulseekDownloadStartEvent on the main call loop
-        # TODO: i think this call_soon_threadsafe will be unnecessary once we refactor everything to use async
-        self.event_loop.call_soon_threadsafe(
-            event_bus.emit,
+        event_bus.emit(
             SoulseekDownloadStartEvent(
                 download_file_id=download_file_id,
                 download_filename=download_filename,
@@ -75,15 +70,13 @@ class SoulseekDownloader:
         slskd_download = None
         while percent_complete < 100:
             elapsed_time = time.time() - start_time
-            slskd_download = self._client.transfers.get_download(download_user, download_file_id)
+            slskd_download = await asyncio.to_thread(self._client.transfers.get_download, download_user, download_file_id)
 
             if slskd_download is not None:
                 percent_complete = slskd_download["percentComplete"]
 
-                # TODO: i think this call_soon_threadsafe will be unnecessary once we refactor everything to use async
                 if percent_complete > 0:
-                    self.event_loop.call_soon_threadsafe(
-                        event_bus.emit,
+                    event_bus.emit(
                         SoulseekDownloadUpdateEvent(
                             download_file_id=download_file_id,
                             download_filename=download_filename,
@@ -102,7 +95,7 @@ class SoulseekDownloader:
                     logging.info(f'Exception occured in the soulseek download: {slskd_download["exception"]}')
                     break
 
-                time.sleep(.1)
+                await asyncio.sleep(.1)
 
         if slskd_download is not None:
             # move the file from where it was downloaded to the specified output path
@@ -125,9 +118,7 @@ class SoulseekDownloader:
                 if slskd_download['state'] == "InProgress":
                     logger.critical(f"Something very sus has occured, download got to 100 but state is still InProgress. Full slskd_download data: {slskd_download}")
 
-            # TODO: i think this call_soon_threadsafe will be unnecessary once we refactor everything to use async
-            self.event_loop.call_soon_threadsafe(
-                event_bus.emit,
+            event_bus.emit(
                 SoulseekDownloadEndEvent(
                     download_file_id=download_file_id,
                     end_state=slskd_download["state"],
@@ -137,7 +128,7 @@ class SoulseekDownloader:
 
             return final_filepath
     
-    def start_download(self, search_results, max_retries) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    async def start_download(self, search_results, max_retries) -> Tuple[Optional[str], Optional[str], Optional[str]]:
         # attempt to download the each best search result until we reach max_retries or we run out of search_results
         for attempt_count, (file_data, file_user) in enumerate(search_results):
             if attempt_count > max_retries:
@@ -145,19 +136,19 @@ class SoulseekDownloader:
                 return (None, None, None)
             
             try:
-                self._client.transfers.enqueue(file_user, [file_data])
+                await asyncio.to_thread(self._client.transfers.enqueue, file_user, [file_data])
             except Exception as e:
                 logger.info(f"Slskd error during transfer: {e}")
                 continue
 
             filename = file_data["filename"]
-            file_id = self._search_file_id_from_filename(filename)
+            file_id = await self._search_file_id_from_filename(filename)
             return (file_id, filename, file_user)
     
         return (None, None, None)
 
     # TODO: better searching - need to extract artist and title from returned search data somehow - maybe from filepath 
-    def search(self, search_query: str) -> Optional[List]:
+    async def search(self, search_query: str) -> Optional[List]:
         """
         Searches for a track on soulseek
 
@@ -168,13 +159,11 @@ class SoulseekDownloader:
             list: a list of relevant search results
         """
         # start the slskd search and extract the id
-        search = self._client.searches.search_text(search_query)
+        search = await asyncio.to_thread(self._client.searches.search_text, search_query)
         search_id = search["id"]
 
         # emit a search start event (these events are for printing and gui updates only)
-        # TODO: i think this call_soon_threadsafe will be unnecessary once we refactor everything to use async
-        self.event_loop.call_soon_threadsafe(
-            event_bus.emit,
+        event_bus.emit(
             SoulseekSearchStartEvent(
                 search_id=search_id, 
                 search_query=search_query
@@ -185,15 +174,13 @@ class SoulseekDownloader:
         is_complete = False
         total_found_files = 0
         while is_complete == False:
-            search_state = self._client.searches.state(search_id)
+            search_state = await asyncio.to_thread(self._client.searches.state, search_id)
             is_complete = search_state["isComplete"]
             num_found_files = search_state["fileCount"]
 
             if num_found_files > total_found_files:
                 total_found_files = num_found_files
-                # TODO: i think this call_soon_threadsafe will be unnecessary once we refactor everything to use async
-                self.event_loop.call_soon_threadsafe(
-                    event_bus.emit, 
+                event_bus.emit(
                     SoulseekSearchUpdateEvent(
                         search_id=search_id, 
                         search_query=search_query, 
@@ -201,20 +188,19 @@ class SoulseekDownloader:
                     )
                 )
 
-            time.sleep(.1)
+            await asyncio.sleep(.1)
 
         # now that the search is done we can gather results
-        search_results = self._client.searches.search_responses(search_id)
+        search_results = await asyncio.to_thread(self._client.searches.search_responses, search_id)
 
         # filter for just relevant results - audio files that are downloadable from the user sorted by quality
-        relevant_results = self.filter_search_results(search_results, search_query)
+        relevant_results = await self.filter_search_results(search_results, search_query)
         if relevant_results is None:
             logger.info("No relevant results found on Soulseek")
 
         # finally, emit a search end event and return the results
         # TODO: i think this call_soon_threadsafe will be unnecessary once we refactor everything to use async
-        self.event_loop.call_soon_threadsafe(
-            event_bus.emit,
+        event_bus.emit(
             SoulseekSearchEndEvent(
                 search_id=search_id,
                 search_query=search_query,
@@ -230,7 +216,7 @@ class SoulseekDownloader:
     #   - for example, if the new file contains "remix" and the original file does not, we may want to remove it from the results
     #   - currently files are sorted in order of size - this is a mid way to do it 
     #   - we should give more options to the user - file types, size, quality, etc
-    def filter_search_results(self, search_results, search_query: str, file_extensions: List[str] = ["mp3", "flac"]) -> Optional[List[Dict]]:
+    async def filter_search_results(self, search_results, search_query: str, file_extensions: List[str] = ["mp3", "flac"]) -> Optional[List[Dict]]:
         """
         Filters the search results to only include downloadable mp3 and flac files sorted by size
 
@@ -302,7 +288,7 @@ class SoulseekDownloader:
 
         return score
 
-    def _search_file_id_from_filename(self, filename):
+    async def _search_file_id_from_filename(self, filename):
         """
         Gets the download object for a file from slskd
 
@@ -314,7 +300,7 @@ class SoulseekDownloader:
             download: the download data for the file
         """
 
-        for download in self._client.transfers.get_all_downloads():
+        for download in await asyncio.to_thread(self._client.transfers.get_all_downloads):
             for directory in download["directories"]:
                 for file in directory["files"]:
                     if file["filename"] == filename:

@@ -35,8 +35,6 @@ class CLIOrchestrator():
         self._soulseek_downloader = soulseek_downloader
         self._app_params = app_params
 
-        # this is just logic for the spinner. TODO in the future we hopefully wont need self._event_loop since everything will be migrated to async await
-        self._event_loop = asyncio.AbstractEventLoop
         self._spinner_task = None
         self._spinner_running = False
         self._num_found_files: int
@@ -82,10 +80,6 @@ class CLIOrchestrator():
     async def handle_commands(self, args: argparse.Namespace):
         """executes different code depending on the passed in args"""
 
-        # connect the downloader to the event loop - TODO: i think this will be unnecessary once we refactor everything to use async
-        self._event_loop = asyncio.get_event_loop()
-        self._soulseek_downloader.event_loop = self._event_loop
-
         SEARCH_QUERY = args.search_query
         SPOTIFY_PLAYLIST_URL = args.playlist_url
         DOWNLOAD_LIKED = args.download_liked
@@ -94,10 +88,10 @@ class CLIOrchestrator():
 
         if NEW_TRACK_FILEPATH:
             async with self._db_session_maker() as session:
-                await asyncio.to_thread(add_local_track_to_db, session, NEW_TRACK_FILEPATH)
+                await add_local_track_to_db(session, NEW_TRACK_FILEPATH)
 
         if SEARCH_QUERY:
-            output_path = await asyncio.to_thread(download_from_search_query, self._soulseek_downloader, SEARCH_QUERY, self._app_params.output_path, self._app_params.youtube_only, self._app_params.max_download_retries)
+            output_path = await download_from_search_query(self._soulseek_downloader, SEARCH_QUERY, self._app_params.output_path, self._app_params.youtube_only, self._app_params.max_download_retries)
             # TODO: get metadata and insert into database
 
         # get all playlists from spotify and add them to the database
@@ -117,7 +111,7 @@ class CLIOrchestrator():
         # TODO: refactor this function
         if SPOTIFY_PLAYLIST_URL:
             async with self._db_session_maker() as session:
-                await asyncio.to_thread(download_playlist_from_spotify_url, self._soulseek_downloader, self._spotify_client, session, SPOTIFY_PLAYLIST_URL, self._app_params.output_path)
+                await download_playlist_from_spotify_url(self._soulseek_downloader, self._spotify_client, session, SPOTIFY_PLAYLIST_URL, self._app_params.output_path)
 
     async def _on_soulseek_search_start(self, event: SoulseekSearchStartEvent):
         """initializes a new earth spinner and does some printing"""
