@@ -1,6 +1,6 @@
 import os
 from typing import List, Optional
-import sqlalchemy.orm
+from sqlalchemy.ext.asyncio import AsyncSession
 import logging
 
 from soulripper.database.models.tracks import Tracks
@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 # TODO: this function technically kinda works but we need a better way to extract metadata from the files - most files (all downloaded by yt-dlp) have None for all fields except filepath :/
 #   - maybe we can extract info from filename
 #   - we should probably populate metadata using TrackData from database or Spotify API - this is a lot of work dgaf rn lol
-def add_local_library_to_db(sql_session: sqlalchemy.orm.Session, music_dir: str, valid_extensions: List[str]) -> None:
+async def add_local_library_to_db(sql_session: AsyncSession, music_dir: str, valid_extensions: List[str]) -> None:
     """
     Adds all songs in the music directory to the database
 
@@ -28,9 +28,9 @@ def add_local_library_to_db(sql_session: sqlalchemy.orm.Session, music_dir: str,
             file_extension = os.path.splitext(filename)[1]
             if file_extension in valid_extensions:
                 filepath = os.path.abspath(os.path.join(root, filename))
-                add_local_track_to_db(sql_session, filepath)
+                await add_local_track_to_db(sql_session, filepath)
 
-def add_local_track_to_db(sql_session: sqlalchemy.orm.Session, filepath: str) -> Optional[Tracks]:
+async def add_local_track_to_db(sql_session: AsyncSession, filepath: str) -> Optional[Tracks]:
     if not os.path.exists(filepath):
         logger.warning(f"The file you tried to add ({filepath}) does not exist, skipping...")
         return None
@@ -40,7 +40,7 @@ def add_local_track_to_db(sql_session: sqlalchemy.orm.Session, filepath: str) ->
     if file_track_data is None:
         file_track_data = TrackData(filepath=filepath, comments="WARNING: Error while extracting metadata. This likely means the file is corrupted or empty")
 
-    new_track_row = TracksRepository.add_track(sql_session, file_track_data)
-    sql_session.commit()
+    new_track_row = await TracksRepository.add_track(sql_session, file_track_data)
+    await sql_session.commit()
 
     return new_track_row

@@ -28,12 +28,15 @@ def init_logger(log_filepath: str, log_level: int, db_echo: bool, silence_other_
     )
 
     if db_echo:
-        logging.getLogger('sqlalchemy.engine').setLevel(logging.INFO)
+        logging.getLogger("sqlalchemy.engine").setLevel(logging.DEBUG)
+        logging.getLogger("aiosqlite").setLevel(logging.DEBUG)
 
     if silence_other_packages:
+        logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
+        logging.getLogger("aiosqlite").setLevel(logging.WARNING)
+        logging.getLogger("pyventus").setLevel(logging.WARNING)
         logging.getLogger("spotipy").setLevel(logging.WARNING)
         logging.getLogger("urllib3").setLevel(logging.WARNING)
-        logging.getLogger("pyventus").setLevel(logging.WARNING)
         logging.getLogger("asyncio").setLevel(logging.WARNING)
 
     # send logs to stderr, this is to keep stdout clean for our cli printing logic

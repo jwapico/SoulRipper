@@ -1,7 +1,4 @@
-import sqlalchemy as sqla
-from sqlalchemy.orm import Session
 from pyventus.events import EventLinker
-from sqlalchemy.ext.asyncio import AsyncSession, AsyncEngine
 import alive_progress
 from alive_progress import config_handler
 import logging
@@ -70,20 +67,14 @@ class CLIOrchestrator():
             input("Warning: This will drop all tables in the database. Press enter to continue...")
 
             async with self._db_engine.begin() as conn:
-                metadata = sqla.MetaData()
-                await conn.run_sync(metadata.reflect, self._db_engine)
-                await conn.run_sync(metadata.drop_all)
+                await conn.run_sync(lambda sync_conn: Base.metadata.drop_all(sync_conn))
+                await conn.run_sync(lambda sync_conn: Base.metadata.create_all(sync_conn))
 
         else:
             # TODO: experiment with this in and out of async function to see if things are dramatically faster inside
             # populate the database with metadata found from files in the users output directory
             async with self._db_session_maker() as session:
-                await asyncio.to_thread(
-                    add_local_library_to_db,
-                    session,
-                    self._app_params.output_path,
-                    self._app_params.valid_music_extensions
-                )
+                await add_local_library_to_db(session, self._app_params.output_path, self._app_params.valid_music_extensions)
 
         # now enter our main logic from an async function
         await self.handle_commands(args=args)
@@ -115,12 +106,12 @@ class CLIOrchestrator():
             if all_playlists_metadata:
                 for playlist_metadata in all_playlists_metadata:
                     async with self._db_session_maker() as session:
-                        await asyncio.to_thread(update_db_with_spotify_playlist, session, self._spotify_client, playlist_metadata)
+                        await update_db_with_spotify_playlist(session, self._spotify_client, playlist_metadata)
 
         # if the update liked flag is provided, download all liked songs from spotify
         if DOWNLOAD_LIKED:
             async with self._db_session_maker() as session:
-                await asyncio.to_thread(download_liked_songs, self._soulseek_downloader, self._spotify_client, session, self._app_params.output_path, self._app_params.youtube_only)
+                await download_liked_songs(self._soulseek_downloader, self._spotify_client, session, self._app_params.output_path, self._app_params.youtube_only)
         
         # if a playlist url is provided, download the playlist
         # TODO: refactor this function
