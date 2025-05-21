@@ -1,4 +1,5 @@
 from typing import Optional, Tuple, List, Dict
+import rapidfuzz.fuzz
 import slskd_api
 import logging
 import asyncio
@@ -18,7 +19,7 @@ from .events import (
     event_bus
 )
 
-from soulripper.utils.file_utils import get_file_extension
+from soulripper.utils.file_utils import extract_file_extension, extract_filename
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +70,7 @@ class SoulseekDownloader:
         percent_complete = 0.0
         slskd_download = None
         while percent_complete < 100:
-            elapsed_time = time.time() - start_time
+            idle_time = time.time() - start_time
             slskd_download = await asyncio.to_thread(self._client.transfers.get_download, download_user, download_file_id)
 
             if slskd_download is not None:
@@ -84,13 +85,17 @@ class SoulseekDownloader:
                         )
                     )
 
-                # if the download has taken longer than the timeout time AND the download is still at 0%, give up and break
-                # TODO: we prolly need a better way of doing this, what if the download goes stale at 50%? i think there is way to look at transfer rates
-                if elapsed_time > inactive_download_timeout * 60 and percent_complete == 0.0:
-                    logging.info(f'Download was inactive for {inactive_download_timeout} minutes, skipping')
-                    break
+                # if the download speed stays at 0 for longer than the inactive_download_timeout, break the waiting loop
+                download_speed = slskd_download["averageSpeed"]
+                if download_speed > 0:
+                    start_time = time.time()
+                else:
+                    idle_time = time.time() - start_time
+                    if idle_time > inactive_download_timeout * 60:
+                        logging.info(f'Download was inactive for {inactive_download_timeout} minutes, skipping')
+                        break
 
-                # if something goes wrong on slskd's end an 'exception' field appears in the download - this is bad so we break if this happens
+                # if something goes wrong on slskd's end an 'exception' field appears in the download - this is prolly bad so we break if this happens
                 if "exception" in slskd_download.keys():
                     logging.info(f'Exception occured in the soulseek download: {slskd_download["exception"]}')
                     break
@@ -109,6 +114,7 @@ class SoulseekDownloader:
                     logger.error(f"SLSKD download state is 'Completed, Succeeded' but the file was not found: {source_path}")
                     return None
                 
+                # TODO: refactor into function to use in youtube.py, also needs to change filename based on search query/TrackData and update comments and metadata fields
                 os.makedirs(os.path.dirname(final_filepath), exist_ok=True)
                 shutil.move(source_path, final_filepath)
             else:
@@ -231,7 +237,7 @@ class SoulseekDownloader:
 
         for result in search_results:
             for file in result["files"]:
-                file_extension = get_file_extension(file["filename"])
+                file_extension = extract_file_extension(file["filename"])
 
                 required_conditions = [
                     result["fileCount"] > 0 and
@@ -254,15 +260,14 @@ class SoulseekDownloader:
     #   - will be different for different file formats
     #   - research into file formats will prolly be needed to do this in the best way possible 
     def _score_file(self, file_data, search_query: str, file_extensions: List[str]) -> int :
-        # extract just the base filename from the data
-        parts = file_data["filename"].replace('\\', '/').split('/')
-        non_empty_parts = [p for p in parts if p.strip() != '']
-        filename = non_empty_parts[-1] if non_empty_parts else ''
-
+        filename = extract_filename(file_data["filename"])
         score = 0
 
         # subtract 100 for each disallowed term in the filename
-        disallowed_terms = ["acapella", "instrumental", "intro", "edit", "clean", "remix", "transition", "stems", "club", "radio", "snippet", "sample", "preview", "karaoke", "cover", "parody", "rework", "bootleg", "mashup"]
+        disallowed_terms = [
+            "acapella", "instrumental", "stems", "intro", "edit", "edited", "clean", "remix", "mix", "transition", "stems", "club", "radio", 
+            "snippet", "sample", "preview", "karaoke", "cover", "parody", "rework", "bootleg", "mashup", "live", "redo", "joint", "edition",
+        ]
         disallowed_terms = [term for term in disallowed_terms if term not in search_query.lower()]
         for term in disallowed_terms:
             if term in filename.lower():
@@ -275,17 +280,23 @@ class SoulseekDownloader:
                 score -= 10
 
         # file_extensions are ordered by priority, so we add more to the score for higher priority extensions
-        file_extension = get_file_extension(filename)
+        file_extension = extract_file_extension(filename)
         if file_extension:
             priority = len(file_extensions) - file_extensions.index(file_extension)
             score += priority * 25
 
-        # we also prioritize files whose names are close to the search query - SequenceMatcher.ratio() returns a 0-1 similarity score
-        query_clean = search_query.lower().replace('-', ' ').replace('_', ' ')
-        filename_clean = filename.lower().replace('-', ' ').replace('_', ' ')
-        similarity = difflib.SequenceMatcher(None, query_clean, filename_clean).ratio()
-        score += round(similarity * 50)
+        # split query and filename into words, ignoring non-alphanumeric characters, and deduct points for extra words
+        filename_words = re.findall(r"\b[\w']+\b", filename.lower())
+        query_words = re.findall(r"\b[\w']+\b", search_query.lower())
+        extra_words = [word for word in filename_words if word not in query_words]
+        score -= len(extra_words) * 10
 
+        token_set_similarity = rapidfuzz.fuzz.token_set_ratio(search_query, filename) / 100
+        edit_dist = rapidfuzz.distance.Levenshtein.distance(search_query, filename)
+        max_len = max(len(search_query), len(filename))
+        levenshtein_similarity = 1 - (edit_dist / max_len)
+
+        score += round(((0.5 * levenshtein_similarity ** 2) + (0.5 * token_set_similarity ** 2)) ** 2.5 * 200)
         return score
 
     async def _search_file_id_from_filename(self, filename):

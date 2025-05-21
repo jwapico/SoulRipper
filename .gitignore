@@ -190,3 +190,4 @@ assets/slskd.yml
 assets/soul.db-journal
 .DS_Store
 debug/*
+docker-compose.yml

@@ -39,7 +39,9 @@ TODO's (~ roughly in order of importance):
           - https://docs.flutter.dev/
           - https://docs.flutter.dev/get-started/codelab
           - https://docs.flutter.dev/get-started/install/linux/web
+          - music player: https://pub.dev/packages/just_audio
           - we should make sure we have the back end right before we start on the front end
+          - look at these for gui and perhaps source code inspo https://github.com/topics/flutter-music-player
   - cache spotify api data so we dont have to retreive ALL of it every time
       - talk to colton eoghan and other potential users about high level design
       - we also need to rewrite the SpotifyClient class to use an async library [async-spotify](https://pypi.org/project/async-spotify/) or write our own library with [aiohttp](https://pypi.org/project/aiohttp/)

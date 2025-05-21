@@ -10,13 +10,19 @@ from soulripper.utils.app_params import AppParams
 
 logger = logging.getLogger(__name__)
 
-def get_file_extension(filepath: str) -> Optional[str]:
+def extract_file_extension(filepath: str) -> Optional[str]:
     match = re.search(r'\.([a-zA-Z0-9]+)$', filepath.lower())
 
     if match is None:
         return
 
     return match.group(1)
+
+def extract_filename(filepath: str) -> str:
+        parts = filepath.replace('\\', '/').split('/')
+        non_empty_parts = [p for p in parts if p.strip() != '']
+        filename = non_empty_parts[-1] if non_empty_parts else ''
+        return filename
 
 # TODO: look at metadata to see what else we can extract - it's different for each file type :( - prolly documentation on the internet but will require more logic
 def extract_file_metadata(filepath: str) -> Optional[TrackData]:

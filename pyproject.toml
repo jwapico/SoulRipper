@@ -23,7 +23,8 @@ dependencies = [
   "alive_progress",
   "python-dateutil",
   "aiosqlite",
-  "greenlet"
+  "greenlet",
+  "rapidfuzz"
 ]
 
 [project.urls]
