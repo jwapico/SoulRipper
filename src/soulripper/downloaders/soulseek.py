@@ -255,20 +255,16 @@ class SoulseekDownloader:
         
         return None
     
-    # TODO: this function could probably be improved quite a bit, the scaling factors are chosen pretty much randomly
-    # TODO: add heuristic for file quality
-    #   - will be different for different file formats
-    #   - research into file formats will prolly be needed to do this in the best way possible 
     def _score_file(self, file_data, search_query: str, file_extensions: List[str]) -> int :
         filename = extract_filename(file_data["filename"])
         score = 0
 
         # subtract 100 for each disallowed term in the filename
-        disallowed_terms = [
+        base_disallowed_terms = [
             "acapella", "instrumental", "stems", "intro", "edit", "edited", "clean", "remix", "mix", "transition", "stems", "club", "radio", 
             "snippet", "sample", "preview", "karaoke", "cover", "parody", "rework", "bootleg", "mashup", "live", "redo", "joint", "edition",
         ]
-        disallowed_terms = [term for term in disallowed_terms if term not in search_query.lower()]
+        disallowed_terms = [term for term in base_disallowed_terms if term not in search_query.lower()]
         for term in disallowed_terms:
             if term in filename.lower():
                 score -= 100
@@ -285,17 +281,19 @@ class SoulseekDownloader:
             priority = len(file_extensions) - file_extensions.index(file_extension)
             score += priority * 25
 
-        # split query and filename into words, ignoring non-alphanumeric characters, and deduct points for extra words
+        # split query and filename into words, ignoring non-alphanumeric characters, and deduct points for extra words in the filaname not found in the query
         filename_words = re.findall(r"\b[\w']+\b", filename.lower())
         query_words = re.findall(r"\b[\w']+\b", search_query.lower())
         extra_words = [word for word in filename_words if word not in query_words]
         score -= len(extra_words) * 10
 
+        # find the token set and levenshtein (edit distance) similarity
         token_set_similarity = rapidfuzz.fuzz.token_set_ratio(search_query, filename) / 100
         edit_dist = rapidfuzz.distance.Levenshtein.distance(search_query, filename)
         max_len = max(len(search_query), len(filename))
         levenshtein_similarity = 1 - (edit_dist / max_len)
 
+        # normalize and scale the similarities by exponential functions and a linear constant
         score += round(((0.5 * levenshtein_similarity ** 2) + (0.5 * token_set_similarity ** 2)) ** 2.5 * 200)
         return score
 
