@@ -61,5 +61,8 @@ async def main():
 
         await cli_orchestrator.run()
 
-if __name__ == "__main__":
+def soulrip():
     asyncio.run(main())
+
+if __name__ == "__main__":
+    soulrip()
