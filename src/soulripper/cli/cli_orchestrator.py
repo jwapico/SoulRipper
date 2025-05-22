@@ -60,12 +60,13 @@ class CLIOrchestrator():
         EventLinker.on(SoulseekSearchEndEvent)(self._on_soulseek_search_end)
 
         # async sqlalchemy initialization
-        db_engine = create_async_engine(f"sqlite+aiosqlite:///{self._app_params.database_path}", echo=self._app_params.db_echo)
-        self._db_session_maker: async_sessionmaker[AsyncSession] = async_sessionmaker(bind=db_engine, expire_on_commit=False, class_=AsyncSession)
+        self._db_engine = create_async_engine(f"sqlite+aiosqlite:///{self._app_params.database_path}", echo=self._app_params.db_echo)
+        self._db_session_maker: async_sessionmaker[AsyncSession] = async_sessionmaker(bind=self._db_engine, expire_on_commit=False, class_=AsyncSession)
 
     async def run(self):
         """Spins up a new asyncio coroutine that manages the CLI - also executes some database initialization steps"""
         args = self._parse_cmdline_args()
+        dotenv.load_dotenv()   
 
         SEARCH_QUERY = args.search_query
         SPOTIFY_PLAYLIST_URL = args.playlist_url
@@ -76,7 +77,6 @@ class CLIOrchestrator():
 
         # if we need to do anything with the spotify api initialize the SpotifyClient from the users api keys and config
         if SPOTIFY_PLAYLIST_URL or DOWNLOAD_LIKED or DOWNLOAD_ALL_PLAYLISTS:
-            dotenv.load_dotenv()   
             SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
             SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
             SPOTIFY_REDIRECT_URI = os.getenv("SPOTIFY_REDIRECT_URI")
@@ -91,48 +91,47 @@ class CLIOrchestrator():
             else:
                 raise Exception("You need to set SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, and SPOTIFY_REDIRECT_URI in your .env file")
 
-        # if we need to do any downloading initialize the SoulseekDownloader
-        if SEARCH_QUERY or SPOTIFY_PLAYLIST_URL or DOWNLOAD_LIKED or DOWNLOAD_ALL_PLAYLISTS:
-            SLSKD_API_KEY = os.getenv("SLSKD_API_KEY")
-            if SLSKD_API_KEY:
-                self._soulseek_downloader = SoulseekDownloader(SLSKD_API_KEY)
-            else:
-                raise Exception("You need to set SLSKD_API_KEY in your .env file")
+        SLSKD_API_KEY = os.getenv("SLSKD_API_KEY")
+        if SLSKD_API_KEY:
+            self._soulseek_downloader = SoulseekDownloader(SLSKD_API_KEY)
+        else:
+            raise Exception("You need to set SLSKD_API_KEY in your .env file")
         
         # now that all initialization is done we create a new db session and call different code depending on args
         async with self._db_session_maker() as session:
-            if DROP_DATABASE:
-                input("Warning: This will drop all tables in the database. Press enter to continue...")
+            async with self._soulseek_downloader as soulseek_downloader:
+                if DROP_DATABASE:
+                    input("Warning: This will drop all tables in the database. Press enter to continue...")
 
-                async with self._db_engine.begin() as conn:
-                    await conn.run_sync(lambda sync_conn: Base.metadata.drop_all(sync_conn))
-                    await conn.run_sync(lambda sync_conn: Base.metadata.create_all(sync_conn))
-            else:
-                # we only sync the local library if the user did not want to drop the database 
-                await add_local_library_to_db(session, self._app_params.output_path, self._app_params.valid_music_extensions)
+                    async with self._db_engine.begin() as conn:
+                        await conn.run_sync(lambda sync_conn: Base.metadata.drop_all(sync_conn))
+                        await conn.run_sync(lambda sync_conn: Base.metadata.create_all(sync_conn))
+                else:
+                    # we only sync the local library if the user did not want to drop the database 
+                    await add_local_library_to_db(session, self._app_params.output_path, self._app_params.valid_music_extensions)
 
-            # manual way to add a new local track to the database
-            if NEW_TRACK_FILEPATH:
-                await add_local_track_to_db(session, NEW_TRACK_FILEPATH)
+                # manual way to add a new local track to the database
+                if NEW_TRACK_FILEPATH:
+                    await add_local_track_to_db(session, NEW_TRACK_FILEPATH)
 
-            # attempts a soulseek then youtube download for the given search query
-            if SEARCH_QUERY:
-                output_path = await download_from_search_query(self._soulseek_downloader, SEARCH_QUERY, self._app_params.output_path, self._app_params.youtube_only, self._app_params.max_download_retries)
-                # TODO: get metadata and insert into database
+                # attempts a soulseek then youtube download for the given search query
+                if SEARCH_QUERY:
+                    output_path = await download_from_search_query(soulseek_downloader, SEARCH_QUERY, self._app_params.output_path, self._app_params.youtube_only, self._app_params.max_download_retries)
+                    # TODO: get metadata and insert into database
 
-            # gets all playlists from spotify, adds them to the database, then downloads each track
-            if DOWNLOAD_ALL_PLAYLISTS:
-                await update_db_with_all_playlists(session, self._spotify_client)
-                await download_all_playlists(session, self._soulseek_downloader, self._app_params.output_path, self._app_params.youtube_only, self._app_params.max_download_retries)
+                # gets all playlists from spotify, adds them to the database, then downloads each track
+                if DOWNLOAD_ALL_PLAYLISTS:
+                    await update_db_with_all_playlists(session, self._spotify_client)
+                    await download_all_playlists(session, soulseek_downloader, self._app_params.output_path, self._app_params.youtube_only, self._app_params.max_download_retries)
 
-            # downloads all the users liked songs from spotify
-            if DOWNLOAD_LIKED:
-                await download_liked_songs(self._soulseek_downloader, self._spotify_client, session, self._app_params.output_path, self._app_params.youtube_only)
-            
-            # if a playlist url is provided, download the playlist
-            # TODO: refactor this function
-            if SPOTIFY_PLAYLIST_URL:
-                await download_playlist_from_spotify_url(self._soulseek_downloader, self._spotify_client, session, SPOTIFY_PLAYLIST_URL, self._app_params.output_path)
+                # downloads all the users liked songs from spotify
+                if DOWNLOAD_LIKED:
+                    await download_liked_songs(soulseek_downloader, self._spotify_client, session, self._app_params.output_path, self._app_params.youtube_only)
+                
+                # if a playlist url is provided, download the playlist
+                # TODO: refactor this function
+                if SPOTIFY_PLAYLIST_URL:
+                    await download_playlist_from_spotify_url(soulseek_downloader, self._spotify_client, session, SPOTIFY_PLAYLIST_URL, self._app_params.output_path)
 
     def _parse_cmdline_args(self) -> argparse.Namespace:
         """creates an argparse parser, adds all the arguments, and updates _app_params with parsed values. returns the args"""

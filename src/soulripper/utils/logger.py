@@ -38,6 +38,8 @@ def init_logger(log_filepath: str, log_level: int, db_echo: bool, silence_other_
         logging.getLogger("spotipy").setLevel(logging.WARNING)
         logging.getLogger("urllib3").setLevel(logging.WARNING)
         logging.getLogger("asyncio").setLevel(logging.WARNING)
+        logging.getLogger("httpx").setLevel(logging.WARNING)
+        logging.getLogger("httpcore").setLevel(logging.WARNING)
 
     # send logs to stderr, this is to keep stdout clean for our cli printing logic
     handler = logging.StreamHandler(sys.stderr)
