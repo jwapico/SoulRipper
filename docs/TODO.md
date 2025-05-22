@@ -45,9 +45,12 @@ TODO's (~ roughly in order of importance):
   - cache spotify api data so we dont have to retreive ALL of it every time
       - talk to colton eoghan and other potential users about high level design
       - we also need to rewrite the SpotifyClient class to use an async library [async-spotify](https://pypi.org/project/async-spotify/) or write our own library with [aiohttp](https://pypi.org/project/aiohttp/)
-  - refactor date_liked_spotify out of the Tracks table, can get this info by looking at the date_added field of the SPOTIFY_LIKED_SONGS playlist
-      - although maybe we should keep it as a dedicated field if we feel that it is used often enough, running search queries each time could be cumbersome
-  - restructure this file - there are too many random ahh functions
+  - CONCURRENT DOWNLOADS (tens or hundreds if possible)
+      - i think slskd can parallelize downloads, but it may be easier to use asyncio.create_task
+      - might get rate limited per soulseek account, could automate the creation of accounts and spin up multiple instances of slskd if necessary
+      - unfortunately the slskd-api python wrapper uses requests under the hood, so we need to manually refactor their code to use httpx.AsyncClient for peak concurrency
+        - fortunately their code is super easy to read and convert
+        - tbh we should just convert the apis we need, plop them in our codebase, and abandon slskd-api completely for peak maintainability
   - pass through ssh keys in docker so git works in vscode
   - write an actual README.md
   - better syncing with local music directory
@@ -58,14 +61,9 @@ TODO's (~ roughly in order of importance):
       - we can write error logging to the comment field of a track
           - we should prollt create a seperate column for this
   - virtualdj xml playlist integration (i already have code for this from a previous project i tihnk)
-  - parallelize downloads
-      - threading :D, i think slskd can also parallelize downloads, but it may be better to use threading, idk tho
-  - the print statements in lower level functions should be changed to logging/debug statements
-      - anytime a bare print statement & return None combo appears we should be writing whatever relevant data to a log file
-  - better print statements in download and search functions - should track progress (look at slskd data) instead of printing the state on a new line each time lol
-  - type annotations for ALL functions args and return values
-  - cleanup comments & add more
   - youtube playlist functionality
       - https://developers.google.com/youtube/v3/docs/playlists/list
+  - type annotations for ALL functions args and return values
+  - cleanup comments & add more
 
   - refactor app params to be global, read only, shared state

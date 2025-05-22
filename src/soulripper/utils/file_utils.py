@@ -5,7 +5,6 @@ import json
 import re
 import logging
 
-from soulripper.database.schemas import TrackData
 from soulripper.utils.app_params import AppParams
 
 logger = logging.getLogger(__name__)
@@ -25,7 +24,7 @@ def extract_filename(filepath: str) -> str:
         return filename
 
 # TODO: look at metadata to see what else we can extract - it's different for each file type :( - prolly documentation on the internet but will require more logic
-def extract_file_metadata(filepath: str) -> Optional[TrackData]:
+def extract_file_metadata(filepath: str):
     """
     Extracts metadata from a file using mutagen
 
@@ -35,6 +34,10 @@ def extract_file_metadata(filepath: str) -> Optional[TrackData]:
     Returns:
         Optional[TrackData]: The extracted TrackData, or None
     """
+
+    # TODO: refactor so we don't have to do this lazy loading
+    from soulripper.database.schemas import TrackData
+
     try:
         file_metadata = mutagen._file.File(filepath)
 

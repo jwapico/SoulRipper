@@ -3,7 +3,6 @@ import rapidfuzz.fuzz
 import slskd_api
 import logging
 import asyncio
-import difflib
 import shutil
 import time
 import os
@@ -24,6 +23,7 @@ from soulripper.utils.file_utils import extract_file_extension, extract_filename
 logger = logging.getLogger(__name__)
 
 class SoulseekDownloader:
+    # we communicate with slskd through port 5030, you can visit localhost:5030 to see the web front end
     def __init__(self, api_key: str):
         self._client = slskd_api.SlskdClient("http://slskd:5030", api_key)
 
