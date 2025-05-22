@@ -68,4 +68,4 @@ TODO's (~ roughly in order of importance):
   - youtube playlist functionality
       - https://developers.google.com/youtube/v3/docs/playlists/list
 
-  - this list is getting long as shit lmfao
+  - refactor app params to be global, read only, shared state

@@ -12,6 +12,12 @@ from ..repositories import PlaylistsRepository
 
 logger = logging.getLogger(__name__)
 
+async def update_db_with_all_playlists(sql_session: AsyncSession, spotify_client: SpotifyClient):
+    all_playlists_metadata = await spotify_client.get_all_playlists()
+    if all_playlists_metadata:
+        for playlist_metadata in all_playlists_metadata:
+            await update_db_with_spotify_playlist(sql_session, spotify_client, playlist_metadata)
+
 async def update_db_with_spotify_playlist(sql_session: AsyncSession, spotify_client: SpotifyClient, spotify_playlist_metadata: dict) -> None:
     logger.info(f"Updating database with tracks from playlist {spotify_playlist_metadata['name']}...")
 

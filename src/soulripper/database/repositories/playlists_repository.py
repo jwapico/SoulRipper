@@ -5,8 +5,9 @@ import sqlalchemy as sqla
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models import Playlists, PlaylistTracks
-from ..schemas import TrackData
+from ..schemas import TrackData, PlaylistData
 from .tracks_repository import TracksRepository
+from .artists_repository import ArtistsRepository
 
 logger = logging.getLogger(__name__)
 
@@ -132,3 +133,62 @@ class PlaylistsRepository():
                 continue
 
         await sql_session.commit()
+
+    @classmethod
+    async def get_track_data(cls, sql_session: AsyncSession, playlist_id: int) -> List[TrackData]:
+        playlist_tracks = await cls.get_playlist_track_rows(sql_session, playlist_id)
+
+        if playlist_tracks is None:
+            logger.info(f"No tracks found for playlist with id: {playlist_id}")
+            return []
+        
+        tracks_data: List[TrackData] = []
+        for playlist_track in playlist_tracks:
+            track = await TracksRepository.get_track_from_id(sql_session, playlist_track.track_id)
+            artist_rows = await ArtistsRepository.get_artists_for_track_id(sql_session, playlist_track.track_id)
+
+            if track:
+                artists = [(artist.name, artist.spotify_id) for artist in artist_rows] if artist_rows else None
+
+                tracks_data.append(
+                    TrackData(
+                        filepath=track.filepath,
+                        title=track.title,
+                        artists=artists,
+                        album=track.album,
+                        spotify_id=track.spotify_id,
+                        explicit=track.explicit,
+                        comments=track.comments,
+                        release_date=track.release_date
+                    )
+                )
+
+        return tracks_data
+    
+    @classmethod
+    async def get_all_playlists(cls, sql_session: AsyncSession) -> Optional[List[PlaylistData]]:
+        result = await sql_session.execute(sqla.select(Playlists))
+        playlist_rows = result.scalars().all()
+
+        playlists = []
+        for playlist in playlist_rows:
+            playlist_data = await cls.get_playlist_data(sql_session, playlist.id)
+            playlists.append(playlist_data)
+
+        return playlists
+    
+    @classmethod
+    async def get_playlist_data(cls, sql_session: AsyncSession, playlist_id: int) -> Optional[PlaylistData]:
+        stmt = sqla.select(Playlists).where(Playlists.id == playlist_id)
+        result = await sql_session.execute(stmt)
+        playlist_row = result.scalars().one()
+        tracks = await cls.get_track_data(sql_session, playlist_id)
+
+        if playlist_row:
+            return PlaylistData(
+                id=playlist_row.id,
+                spotify_id=playlist_row.spotify_id,
+                name=playlist_row.name,
+                description=playlist_row.description,
+                tracks=tracks
+            )

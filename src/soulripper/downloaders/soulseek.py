@@ -28,7 +28,7 @@ class SoulseekDownloader:
         self._client = slskd_api.SlskdClient("http://slskd:5030", api_key)
 
     # TODO: the output filename is wrong also ERROR HANDLING
-    async def download_track(self, search_query: str, output_path: str, max_retries: int = 5, inactive_download_timeout: int = 10) -> Optional[str]:       
+    async def download_track(self, search_query: str, output_path: str, max_retries: int = 5, inactive_download_timeout: int = 5) -> Optional[str]:       
         """
         Attempts to download a track from soulseek
 

@@ -6,7 +6,7 @@ import os
 
 from soulripper.database.services import update_db_with_spotify_liked_tracks, get_track_data_from_playlist
 from soulripper.database.repositories import TracksRepository, PlaylistsRepository, ArtistsRepository
-from soulripper.database.schemas import TrackData
+from soulripper.database.schemas import TrackData, PlaylistData
 from soulripper.spotify import SpotifyClient
 from soulripper.downloaders import SoulseekDownloader, download_track_ytdlp
 
@@ -135,3 +135,33 @@ async def download_track(slskd_client: SoulseekDownloader, track: TrackData, out
     search_query = f"{track.title} - {artists}"
     download_path = await download_from_search_query(slskd_client, search_query, output_path)
     return download_path
+
+async def download_all_playlists(sql_session: AsyncSession, slskd_client: SoulseekDownloader, output_path: str, yt_only: bool, max_retries: int):
+    playlists_data = await PlaylistsRepository.get_all_playlists(sql_session)
+
+    if playlists_data:
+        for playlist_data in playlists_data:
+            if playlist_data.id:
+                await download_playlist(sql_session, playlist_data.id, slskd_client, output_path, yt_only, max_retries)
+
+async def download_playlist(sql_session: AsyncSession, playlist_id: int, slskd_client: SoulseekDownloader, output_path: str, yt_only: bool, max_retries: int) -> None:
+    """
+    Downloads all the tracks of a playlist in the database
+
+    Args:
+        sql_session (AsyncSession): The sqlalchemy AsyncSession
+        playlist_id (int): The id of the playlist to download
+    """
+
+    playlist_track_rows = await PlaylistsRepository.get_playlist_track_rows(sql_session, playlist_id)
+
+    if playlist_track_rows is None:
+        logger.error("Could not retreive liked playlist tracks from database.")
+        return
+    
+    playlist_track_data = await PlaylistsRepository.get_track_data(sql_session, playlist_id)
+
+    if playlist_track_data:
+        for track in playlist_track_data:
+            search_query = f"{track.title} - {', '.join([artist[0] for artist in track.artists]) if track.artists else ''}"
+            await download_from_search_query(slskd_client, search_query, output_path, yt_only, max_retries)

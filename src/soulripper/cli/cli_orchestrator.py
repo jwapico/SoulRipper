@@ -7,7 +7,7 @@ import argparse
 import sys
 import os
 
-from soulripper.database import update_db_with_spotify_playlist
+from soulripper.database import update_db_with_all_playlists
 from soulripper.database import add_local_library_to_db, add_local_track_to_db
 from soulripper.database import Base
 from soulripper.utils import AppParams
@@ -16,7 +16,8 @@ from soulripper.downloaders import (
     SoulseekDownloader, 
     download_from_search_query, 
     download_liked_songs, 
-    download_playlist_from_spotify_url, 
+    download_playlist_from_spotify_url,
+    download_all_playlists,
     SoulseekDownloadStartEvent, 
     SoulseekDownloadUpdateEvent, 
     SoulseekDownloadEndEvent, 
@@ -86,6 +87,7 @@ class CLIOrchestrator():
         DOWNLOAD_ALL_PLAYLISTS = args.download_all_playlists
         NEW_TRACK_FILEPATH = args.add_track
 
+
         if NEW_TRACK_FILEPATH:
             async with self._db_session_maker() as session:
                 await add_local_track_to_db(session, NEW_TRACK_FILEPATH)
@@ -96,11 +98,9 @@ class CLIOrchestrator():
 
         # get all playlists from spotify and add them to the database
         if DOWNLOAD_ALL_PLAYLISTS:
-            all_playlists_metadata = await self._spotify_client.get_all_playlists()
-            if all_playlists_metadata:
-                for playlist_metadata in all_playlists_metadata:
-                    async with self._db_session_maker() as session:
-                        await update_db_with_spotify_playlist(session, self._spotify_client, playlist_metadata)
+            async with self._db_session_maker() as session:
+                # await update_db_with_all_playlists(session, self._spotify_client)
+                await download_all_playlists(session, self._soulseek_downloader, self._app_params.output_path, self._app_params.youtube_only, self._app_params.max_download_retries)
 
         # if the update liked flag is provided, download all liked songs from spotify
         if DOWNLOAD_LIKED:

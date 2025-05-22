@@ -17,7 +17,9 @@ from .download_orchestrator import (
     download_liked_songs, 
     download_liked_tracks_from_spotify_data, 
     download_playlist_from_spotify_url, 
-    download_track
+    download_track,
+    download_playlist,
+    download_all_playlists
 )
 
 __all__ = [
@@ -37,5 +39,11 @@ __all__ = [
     "event_bus",
 
     # download_orchestrator.py
-    "download_from_search_query", "download_liked_songs", "download_liked_tracks_from_spotify_data", "download_playlist_from_spotify_url", "download_track",
+    "download_from_search_query", 
+    "download_liked_songs", 
+    "download_liked_tracks_from_spotify_data", 
+    "download_playlist_from_spotify_url", 
+    "download_track",
+    "download_playlist",
+    "download_all_playlists",
 ]
