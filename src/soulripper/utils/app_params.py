@@ -17,4 +17,5 @@ class AppParams:
     log_filepath: str
     db_echo: bool
     valid_music_extensions: List[str]
+    num_concurrent_downloads: int
 

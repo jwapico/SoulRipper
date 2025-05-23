@@ -16,7 +16,7 @@ from soulripper.utils import AppParams
 from soulripper.spotify import SpotifyClient, SpotifyUserData
 from soulripper.downloaders import (
     SoulseekDownloader, 
-    download_from_search_query, 
+    download_track, 
     download_liked_songs, 
     download_playlist_from_spotify_url,
     download_all_playlists,
@@ -116,7 +116,7 @@ class CLIOrchestrator():
 
                 # attempts a soulseek then youtube download for the given search query
                 if SEARCH_QUERY:
-                    output_path = await download_from_search_query(soulseek_downloader, SEARCH_QUERY, self._app_params.output_path, self._app_params.youtube_only, self._app_params.max_download_retries)
+                    output_path = await download_track(soulseek_downloader, SEARCH_QUERY, self._app_params.output_path, self._app_params.youtube_only, self._app_params.max_download_retries)
                     # TODO: get metadata and insert into database
 
                 # gets all playlists from spotify, adds them to the database, then downloads each track

@@ -8,6 +8,8 @@ from ..schemas import TrackData
 
 logger = logging.getLogger(__name__)
 
+# TODO: Refactor all repositories so the respective schema is the only way to read and write to the database 
+
 class TracksRepository():
     @classmethod
     async def get_track_from_id(cls, sql_session: AsyncSession, track_id: int) -> Optional[Tracks]:
