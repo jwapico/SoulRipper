@@ -117,8 +117,7 @@ class CLIOrchestrator():
 
                 # attempts a soulseek then youtube download for the given search query
                 if SEARCH_QUERY:
-                    output_path = await self._download_orchestrator.download_track(SEARCH_QUERY)
-                    # TODO: get metadata and insert into database (in function)
+                    output_path = await self._download_orchestrator.download_track(search_query=SEARCH_QUERY, update_db=True)
 
                 # gets all playlists from spotify, adds them to the database, then downloads each track
                 if DOWNLOAD_ALL_PLAYLISTS:
