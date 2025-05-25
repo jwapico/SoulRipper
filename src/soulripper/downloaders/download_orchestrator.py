@@ -13,9 +13,8 @@ from soulripper.utils import AppParams
 
 logger = logging.getLogger(__name__)
 
-# TODO: a lot of this code (and sync services) need to be refactored
-# TODO: should this be a class?
 # TODO: downloads should happen concurrently: https://www.reddit.com/r/learnpython/comments/rlcbid/asyncio_make_2_functions_run_concurrently_without/
+# TODO: download_track should take TrackData and construct a search query - downloading from a search query directly needs to exist but should not be the main method to download a track
 
 class DownloadOrchestrator():
     def __init__(self, soulseek_downloader: SoulseekDownloader, spotify_client: SpotifyClient, spotify_synchronizer: SpotifySynchronizer, sql_session: AsyncSession, app_params: AppParams):
@@ -140,5 +139,5 @@ class DownloadOrchestrator():
         if playlist_track_data:
             for track in playlist_track_data:
                 search_query = f"{track.title} - {', '.join([artist[0] for artist in track.artists]) if track.artists else ''}"
-                output_filepath = await self.download_track(search_query)
-                # TODO: set filepath field in db
+                track.filepath = await self.download_track(search_query)
+                await TracksRepository.add_track(self._sql_session, track)

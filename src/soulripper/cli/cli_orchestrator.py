@@ -96,6 +96,7 @@ class CLIOrchestrator():
         # now that all initialization is done we create a new db session and call different code depending on args
         async with self._db_session_maker() as session:
             async with self._soulseek_downloader as soulseek_downloader:
+                # initialize local and spotify db synchronizers and the download orchestrator
                 self._local_synchronizer = LocalSynchronizer(session)
                 self._spotify_synchronizer = SpotifySynchronizer(session, self._spotify_client)
                 self._download_orchestrator = DownloadOrchestrator(self._soulseek_downloader, self._spotify_client, self._spotify_synchronizer, session, self._app_params)
