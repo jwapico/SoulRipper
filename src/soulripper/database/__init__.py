@@ -25,9 +25,7 @@ from .repositories import (
 # high level services manipulating the database (business logic)
 from .services import (
     LocalSynchronizer,
-    update_db_with_spotify_playlist,
-    update_db_with_spotify_liked_tracks,
-    update_db_with_all_playlists
+    SpotifySynchronizer
 )
 
 __all__ = [
@@ -51,7 +49,5 @@ __all__ = [
     
     # service imports
     "LocalSynchronizer",
-    "update_db_with_spotify_playlist",
-    "update_db_with_spotify_liked_tracks",
-    "update_db_with_all_playlists",
+    "SpotifySynchronizer"
 ]

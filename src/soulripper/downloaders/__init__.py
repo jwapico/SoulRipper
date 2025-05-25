@@ -13,12 +13,7 @@ from .events import (
 )
 
 from .download_orchestrator import (
-    download_track, 
-    download_liked_songs, 
-    download_liked_tracks_from_spotify_data, 
-    download_from_track_data,
-    download_playlist,
-    download_all_playlists
+    DownloadOrchestrator
 )
 
 __all__ = [
@@ -38,10 +33,5 @@ __all__ = [
     "event_bus",
 
     # download_orchestrator.py
-    "download_track", 
-    "download_liked_songs", 
-    "download_liked_tracks_from_spotify_data", 
-    "download_from_track_data",
-    "download_playlist",
-    "download_all_playlists",
+    "DownloadOrchestrator",
 ]

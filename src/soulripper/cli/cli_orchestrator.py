@@ -9,17 +9,12 @@ import argparse
 import sys
 import os
 
-from soulripper.database import update_db_with_all_playlists
-from soulripper.database import LocalSynchronizer, update_db_with_spotify_playlist
-from soulripper.database import Base
+from soulripper.database import Base, LocalSynchronizer, SpotifySynchronizer
 from soulripper.utils import AppParams
 from soulripper.spotify import SpotifyClient, SpotifyUserData
 from soulripper.downloaders import (
     SoulseekDownloader, 
-    download_track, 
-    download_liked_songs, 
-    download_playlist,
-    download_all_playlists,
+    DownloadOrchestrator,
     SoulseekDownloadStartEvent, 
     SoulseekDownloadUpdateEvent, 
     SoulseekDownloadEndEvent, 
@@ -102,6 +97,8 @@ class CLIOrchestrator():
         async with self._db_session_maker() as session:
             async with self._soulseek_downloader as soulseek_downloader:
                 self._local_synchronizer = LocalSynchronizer(session)
+                self._spotify_synchronizer = SpotifySynchronizer(session, self._spotify_client)
+                self._download_orchestrator = DownloadOrchestrator(self._soulseek_downloader, self._spotify_client, self._spotify_synchronizer, session, self._app_params)
 
                 if DROP_DATABASE:
                     input("Warning: This will drop all tables in the database. Press enter to continue...")
@@ -119,17 +116,17 @@ class CLIOrchestrator():
 
                 # attempts a soulseek then youtube download for the given search query
                 if SEARCH_QUERY:
-                    output_path = await download_track(soulseek_downloader, SEARCH_QUERY, self._app_params.output_path, self._app_params.youtube_only, self._app_params.max_download_retries)
-                    # TODO: get metadata and insert into database
+                    output_path = await self._download_orchestrator.download_track(SEARCH_QUERY)
+                    # TODO: get metadata and insert into database (in function)
 
                 # gets all playlists from spotify, adds them to the database, then downloads each track
                 if DOWNLOAD_ALL_PLAYLISTS:
-                    await update_db_with_all_playlists(session, self._spotify_client)
-                    await download_all_playlists(session, soulseek_downloader, self._app_params.output_path, self._app_params.youtube_only, self._app_params.max_download_retries)
+                    await self._spotify_synchronizer.update_db_with_all_playlists()
+                    await self._download_orchestrator.download_all_playlists()
 
                 # downloads all the users liked songs from spotify
                 if DOWNLOAD_LIKED:
-                    await download_liked_songs(soulseek_downloader, self._spotify_client, session, self._app_params.output_path, self._app_params.youtube_only)
+                    await self._download_orchestrator.download_liked_songs()
                 
                 # if a playlist url is provided, download the playlist
                 if SPOTIFY_PLAYLIST_URL:
@@ -137,8 +134,8 @@ class CLIOrchestrator():
                     playlist_metadata = await self._spotify_client.get_playlist_info(playlist_id)
 
                     if playlist_metadata:
-                        playlist_row = await update_db_with_spotify_playlist(session, self._spotify_client, playlist_metadata)
-                        await download_playlist(session, playlist_row.id, soulseek_downloader, self._app_params.output_path, self._app_params.youtube_only, self._app_params.max_download_retries)
+                        playlist_row = await self._spotify_synchronizer.update_db_with_spotify_playlist(playlist_metadata)
+                        await self._download_orchestrator.download_playlist(playlist_row.id)
 
     def _parse_cmdline_args(self) -> argparse.Namespace:
         """creates an argparse parser, adds all the arguments, and updates _app_params with parsed values. returns the args"""
