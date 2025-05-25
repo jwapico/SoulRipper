@@ -24,8 +24,7 @@ from .repositories import (
 
 # high level services manipulating the database (business logic)
 from .services import (
-    add_local_track_to_db,
-    add_local_library_to_db,
+    LocalSynchronizer,
     update_db_with_spotify_playlist,
     update_db_with_spotify_liked_tracks,
     update_db_with_all_playlists
@@ -34,26 +33,25 @@ from .services import (
 __all__ = [
     # model imports
     "Tracks",
-     "Artists",
-     "Playlists",
-     "PlaylistTracks",
-     "TrackArtists",
-     "Base",
+    "Artists",
+    "Playlists",
+    "PlaylistTracks",
+    "TrackArtists",
+    "Base",
     
     # schema imports
     "TrackData",
-     "ArtistData",
-     "PlaylistData",
+    "ArtistData",
+    "PlaylistData",
     
     # repository imports
     "TracksRepository",
-     "PlaylistsRepository",
-     "execute_all_interesting_queries",
+    "PlaylistsRepository",
+    "execute_all_interesting_queries",
     
     # service imports
-    "add_local_track_to_db",
-     "add_local_library_to_db",
-     "update_db_with_spotify_playlist",
-     "update_db_with_spotify_liked_tracks",
-     "update_db_with_all_playlists",
+    "LocalSynchronizer",
+    "update_db_with_spotify_playlist",
+    "update_db_with_spotify_liked_tracks",
+    "update_db_with_all_playlists",
 ]

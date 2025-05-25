@@ -10,7 +10,7 @@ import sys
 import os
 
 from soulripper.database import update_db_with_all_playlists
-from soulripper.database import add_local_library_to_db, add_local_track_to_db, update_db_with_spotify_playlist
+from soulripper.database import LocalSynchronizer, update_db_with_spotify_playlist
 from soulripper.database import Base
 from soulripper.utils import AppParams
 from soulripper.spotify import SpotifyClient, SpotifyUserData
@@ -97,9 +97,12 @@ class CLIOrchestrator():
         else:
             raise Exception("You need to set SLSKD_API_KEY in your .env file")
         
+        
         # now that all initialization is done we create a new db session and call different code depending on args
         async with self._db_session_maker() as session:
             async with self._soulseek_downloader as soulseek_downloader:
+                self._local_synchronizer = LocalSynchronizer(session)
+
                 if DROP_DATABASE:
                     input("Warning: This will drop all tables in the database. Press enter to continue...")
 
@@ -108,11 +111,11 @@ class CLIOrchestrator():
                         await conn.run_sync(lambda sync_conn: Base.metadata.create_all(sync_conn))
                 else:
                     # we only sync the local library if the user did not want to drop the database 
-                    await add_local_library_to_db(session, self._app_params.output_path, self._app_params.valid_music_extensions)
+                    await self._local_synchronizer.add_local_library_to_db(self._app_params.output_path, self._app_params.valid_music_extensions)
 
                 # manual way to add a new local track to the database
                 if NEW_TRACK_FILEPATH:
-                    await add_local_track_to_db(session, NEW_TRACK_FILEPATH)
+                    await self._local_synchronizer.add_local_track_to_db(NEW_TRACK_FILEPATH)
 
                 # attempts a soulseek then youtube download for the given search query
                 if SEARCH_QUERY:
