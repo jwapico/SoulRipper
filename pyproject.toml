@@ -24,7 +24,8 @@ dependencies = [
   "python-dateutil",
   "aiosqlite",
   "greenlet",
-  "rapidfuzz"
+  "rapidfuzz",
+  "httpx"
 ]
 
 [project.urls]

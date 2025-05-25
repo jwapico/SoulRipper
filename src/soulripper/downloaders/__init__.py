@@ -16,7 +16,6 @@ from .download_orchestrator import (
     download_track, 
     download_liked_songs, 
     download_liked_tracks_from_spotify_data, 
-    download_playlist_from_spotify_url, 
     download_from_track_data,
     download_playlist,
     download_all_playlists
@@ -42,7 +41,6 @@ __all__ = [
     "download_track", 
     "download_liked_songs", 
     "download_liked_tracks_from_spotify_data", 
-    "download_playlist_from_spotify_url", 
     "download_from_track_data",
     "download_playlist",
     "download_all_playlists",

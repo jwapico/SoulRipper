@@ -10,7 +10,7 @@ import sys
 import os
 
 from soulripper.database import update_db_with_all_playlists
-from soulripper.database import add_local_library_to_db, add_local_track_to_db
+from soulripper.database import add_local_library_to_db, add_local_track_to_db, update_db_with_spotify_playlist
 from soulripper.database import Base
 from soulripper.utils import AppParams
 from soulripper.spotify import SpotifyClient, SpotifyUserData
@@ -18,7 +18,7 @@ from soulripper.downloaders import (
     SoulseekDownloader, 
     download_track, 
     download_liked_songs, 
-    download_playlist_from_spotify_url,
+    download_playlist,
     download_all_playlists,
     SoulseekDownloadStartEvent, 
     SoulseekDownloadUpdateEvent, 
@@ -129,9 +129,13 @@ class CLIOrchestrator():
                     await download_liked_songs(soulseek_downloader, self._spotify_client, session, self._app_params.output_path, self._app_params.youtube_only)
                 
                 # if a playlist url is provided, download the playlist
-                # TODO: refactor this function
                 if SPOTIFY_PLAYLIST_URL:
-                    await download_playlist_from_spotify_url(soulseek_downloader, self._spotify_client, session, SPOTIFY_PLAYLIST_URL, self._app_params.output_path)
+                    playlist_id = self._spotify_client.extract_playlist_id_from_url(SPOTIFY_PLAYLIST_URL)
+                    playlist_metadata = await self._spotify_client.get_playlist_info(playlist_id)
+
+                    if playlist_metadata:
+                        playlist_row = await update_db_with_spotify_playlist(session, self._spotify_client, playlist_metadata)
+                        await download_playlist(session, playlist_row.id, soulseek_downloader, self._app_params.output_path, self._app_params.youtube_only, self._app_params.max_download_retries)
 
     def _parse_cmdline_args(self) -> argparse.Namespace:
         """creates an argparse parser, adds all the arguments, and updates _app_params with parsed values. returns the args"""

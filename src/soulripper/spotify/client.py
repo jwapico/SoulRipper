@@ -84,6 +84,7 @@ class SpotifyClient():
             playlist_description = playlist_info["description"]
 
             return {
+                "id": playlist_id,
                 "name": playlist_name,
                 "description": playlist_description,
             }

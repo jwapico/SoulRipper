@@ -18,7 +18,7 @@ async def update_db_with_all_playlists(sql_session: AsyncSession, spotify_client
         for playlist_metadata in all_playlists_metadata:
             await update_db_with_spotify_playlist(sql_session, spotify_client, playlist_metadata)
 
-async def update_db_with_spotify_playlist(sql_session: AsyncSession, spotify_client: SpotifyClient, spotify_playlist_metadata: dict) -> None:
+async def update_db_with_spotify_playlist(sql_session: AsyncSession, spotify_client: SpotifyClient, spotify_playlist_metadata: dict) -> Playlists:
     logger.info(f"Updating database with tracks from playlist {spotify_playlist_metadata['name']}...")
 
     # get the TrackData for the playlist
@@ -31,6 +31,8 @@ async def update_db_with_spotify_playlist(sql_session: AsyncSession, spotify_cli
     # add the track data to the playlist and commit
     await PlaylistsRepository.add_tracks_to_playlist(sql_session, relevant_tracks_data, playlist_row)
     await sql_session.commit()
+
+    return playlist_row
 
 # TODO: this function takes a while to run, we should find a way to check if there any changes before calling it
 async def update_db_with_spotify_liked_tracks(spotify_client: SpotifyClient, sql_session: AsyncSession) -> Optional[Playlists]:
