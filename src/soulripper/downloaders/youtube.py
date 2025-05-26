@@ -1,3 +1,4 @@
+from typing import Optional
 import logging
 import asyncio
 import re
@@ -7,7 +8,7 @@ logger = logging.getLogger(__name__)
 # TODO: parse the stdout output and publish download events
 
 # TODO: need to embed metadata into the file after it downloads
-async def download_track_ytdlp(search_query: str, output_path: str) -> str :
+async def download_track_ytdlp(search_query: str, output_path: str) -> Optional[str] :
     """
     Downloads a track from youtube using yt-dlp
     
@@ -53,6 +54,6 @@ async def download_track_ytdlp(search_query: str, output_path: str) -> str :
     # this extracts the filepath of the new file from the yt-dlp output, TODO: theres prolly a better way to do this
     file_path_pattern = r'\[EmbedThumbnail\] ffmpeg: Adding thumbnail to "([^"]+)"'
     match = re.search(file_path_pattern, ytdlp_output)
-    download_path = match.group(1) if match else ""
+    download_path = match.group(1) if match else None
 
     return download_path

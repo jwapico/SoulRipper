@@ -70,33 +70,31 @@ class CLIOrchestrator():
         NEW_TRACK_FILEPATH = args.add_track
         DROP_DATABASE = args.drop_database
 
-        # if we need to do anything with the spotify api initialize the SpotifyClient from the users api keys and config
-        if SPOTIFY_PLAYLIST_URL or DOWNLOAD_LIKED or DOWNLOAD_ALL_PLAYLISTS:
-            SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
-            SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
-            SPOTIFY_REDIRECT_URI = os.getenv("SPOTIFY_REDIRECT_URI")
-            if SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET and SPOTIFY_REDIRECT_URI:
-                spotify_user_data = SpotifyUserData(
-                    CLIENT_ID=SPOTIFY_CLIENT_ID, 
-                    CLIENT_SECRET=SPOTIFY_CLIENT_SECRET, 
-                    REDIRECT_URI=SPOTIFY_REDIRECT_URI, 
-                    SCOPE=self._app_params.spotify_scope
-                )
-                self._spotify_client = await SpotifyClient.init(spotify_user_data)
-            else:
-                raise Exception("You need to set SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, and SPOTIFY_REDIRECT_URI in your .env file")
+        # spotify init
+        SPOTIFY_CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
+        SPOTIFY_CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
+        SPOTIFY_REDIRECT_URI = os.getenv("SPOTIFY_REDIRECT_URI")
+        if SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET and SPOTIFY_REDIRECT_URI:
+            spotify_user_data = SpotifyUserData(
+                CLIENT_ID=SPOTIFY_CLIENT_ID, 
+                CLIENT_SECRET=SPOTIFY_CLIENT_SECRET, 
+                REDIRECT_URI=SPOTIFY_REDIRECT_URI, 
+                SCOPE=self._app_params.spotify_scope
+            )
+            self._spotify_client = await SpotifyClient.init(spotify_user_data)
+        else:
+            raise Exception("You need to set SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, and SPOTIFY_REDIRECT_URI in your .env file")
 
+        # slskd init
         SLSKD_API_KEY = os.getenv("SLSKD_API_KEY")
         if SLSKD_API_KEY:
             self._soulseek_downloader = SoulseekDownloader(SLSKD_API_KEY)
         else:
             raise Exception("You need to set SLSKD_API_KEY in your .env file")
         
-        
-        # now that all initialization is done we create a new db session and call different code depending on args
+        # create new db session and call different code depending on args
         async with self._db_session_maker() as session:
             async with self._soulseek_downloader as soulseek_downloader:
-                # initialize local and spotify db synchronizers and the download orchestrator
                 self._local_synchronizer = LocalSynchronizer(session)
                 self._spotify_synchronizer = SpotifySynchronizer(session, self._spotify_client)
                 self._download_orchestrator = DownloadOrchestrator(self._soulseek_downloader, self._spotify_client, self._spotify_synchronizer, session, self._app_params)
@@ -108,7 +106,6 @@ class CLIOrchestrator():
                         await conn.run_sync(lambda sync_conn: Base.metadata.drop_all(sync_conn))
                         await conn.run_sync(lambda sync_conn: Base.metadata.create_all(sync_conn))
                 else:
-                    # we only sync the local library if the user did not want to drop the database 
                     await self._local_synchronizer.add_local_library_to_db(self._app_params.output_path, self._app_params.valid_music_extensions)
 
                 # manual way to add a new local track to the database
@@ -117,7 +114,7 @@ class CLIOrchestrator():
 
                 # attempts a soulseek then youtube download for the given search query
                 if SEARCH_QUERY:
-                    output_path = await self._download_orchestrator.download_track(search_query=SEARCH_QUERY, update_db=True)
+                    await self._download_orchestrator.download_track(search_query=SEARCH_QUERY, update_db=True)
 
                 # gets all playlists from spotify, adds them to the database, then downloads each track
                 if DOWNLOAD_ALL_PLAYLISTS:
@@ -126,6 +123,7 @@ class CLIOrchestrator():
 
                 # downloads all the users liked songs from spotify
                 if DOWNLOAD_LIKED:
+                    await self._spotify_synchronizer.update_db_with_spotify_liked_tracks()
                     await self._download_orchestrator.download_liked_songs()
                 
                 # if a playlist url is provided, download the playlist

@@ -12,6 +12,101 @@ logger = logging.getLogger(__name__)
 
 class TracksRepository():
     @classmethod
+    async def add_track(cls, sql_session: AsyncSession, track_data: TrackData) -> Optional[Tracks]:
+        """
+        Adds a new track to the Tracks table. if an existing track is found it will update the trackdata
+
+        Args: 
+            sql_session (sqlalchemy.ext.asyncio.AsyncSession): Your open SQLAlchemy Session
+            track_data (TrackData): The TrackData of the track you want to add
+
+        Returns:
+            Optional[Tracks]: The new ORM Tracks row, or None
+        """
+        # if there is an existing track, modify it with the new data return that row
+        existing_track = await cls.get_existing_track(sql_session, track_data)
+        if existing_track:
+            await cls.modify_track(sql_session, track_data, existing_track.id)
+            return existing_track
+        
+        # create add and flush the new Track
+        track = Tracks(
+            spotify_id=track_data.spotify_id,
+            filepath=track_data.filepath,
+            title=track_data.title,
+            album=track_data.album,
+            release_date=track_data.release_date,
+            explicit=track_data.explicit,
+            comments=track_data.comments
+        )
+
+        sql_session.add(track)
+        await sql_session.flush()
+
+        # add artists to the Artist table if they don't already exist, and add associations to the TrackArtist table
+        if track_data.artists is not None:
+            await cls.add_track_artists(sql_session, track, track_data.artists)
+
+        return track
+    
+    @classmethod
+    async def modify_track(cls, sql_session: AsyncSession, new_track_data: TrackData, track_id: Optional[int] = None) -> None:
+        """
+        Modifies a track in the Tracks table with new TrackData
+
+        Args: 
+            sql_session (sqlalchemy.ext.asyncio.AsyncSession): Your open SQLAlchemy Session
+            track_id (int): The ID of the track you want to modify
+            new_track_data (TrackData): The new TrackData of the track you want to modify
+
+        Returns:
+            None
+        """
+        # get the existing track, update its fields with the new data if its there, and flush
+
+        if track_id:
+            target_track = await cls.get_track_from_id(sql_session, track_id)
+        else:
+            target_track = await cls.get_existing_track(sql_session, new_track_data)
+
+        if target_track:
+            target_track.spotify_id = new_track_data.spotify_id if new_track_data.spotify_id is not None else target_track.spotify_id
+            target_track.filepath = new_track_data.filepath if new_track_data.filepath is not None else target_track.filepath
+            target_track.title = new_track_data.title if new_track_data.title is not None else target_track.title
+            target_track.album = new_track_data.album if new_track_data.album is not None else target_track.album
+            target_track.release_date = new_track_data.release_date if new_track_data.release_date is not None else target_track.release_date
+            target_track.explicit = new_track_data.explicit if new_track_data.explicit is not None else target_track.explicit
+            target_track.comments = new_track_data.comments if new_track_data.comments is not None else target_track.comments
+
+            await sql_session.flush()
+        else:
+            logger.info("Couldn't find the track you were trying to modify")
+
+    @classmethod
+    async def remove_track(cls, sql_session: AsyncSession, track_id: int) -> bool :
+        """
+        Removes a track from the Tracks table 
+
+        Args: 
+            sql_session (sqlalchemy.ext.asyncio.AsyncSession): Your open SQLAlchemy Session
+            track_id (int): The ID of the track you want to remove
+
+        Returns:
+            bool: Whether or not the track was successfully removed
+        """
+        # get the track, delete it, and flush
+        target_track = await cls.get_track_from_id(sql_session, track_id)
+
+        if target_track:
+            await sql_session.delete(target_track)
+            await sql_session.flush()
+            logger.info(f"Successfully removed the track with id: {track_id}")
+            return True
+        else:
+            logger.info(f"Could not find the track you were trying to remove, track_id = {track_id}")
+            return False
+    
+    @classmethod
     async def get_track_from_id(cls, sql_session: AsyncSession, track_id: int) -> Optional[Tracks]:
         """
         Gets an ORM Tracks row from a track id
@@ -43,43 +138,6 @@ class TracksRepository():
         result = await sql_session.execute(stmt)
         return list(result.scalars().all())
 
-    @classmethod
-    async def add_track(cls, sql_session: AsyncSession, track_data: TrackData) -> Optional[Tracks]:
-        """
-        Adds a new track to the Tracks table
-
-        Args: 
-            sql_session (sqlalchemy.ext.asyncio.AsyncSession): Your open SQLAlchemy Session
-            track_data (TrackData): The TrackData of the track you want to add
-
-        Returns:
-            Optional[Tracks]: The new ORM Tracks row, or None
-        """
-        # if there is an existing track, return that
-        existing_track = await cls.get_existing_track(sql_session, track_data)
-        if existing_track:
-            return existing_track
-        
-        # create add and flush the new Track
-        track = Tracks(
-            spotify_id=track_data.spotify_id,
-            filepath=track_data.filepath,
-            title=track_data.title,
-            album=track_data.album,
-            release_date=track_data.release_date,
-            explicit=track_data.explicit,
-            comments=track_data.comments
-        )
-
-        sql_session.add(track)
-        await sql_session.flush()
-
-        # add artists to the Artist table if they don't already exist, and add associations to the TrackArtist table
-        if track_data.artists is not None:
-            await cls.add_track_artists(sql_session, track, track_data.artists)
-
-        return track
-    
     @classmethod 
     async def add_track_artists(cls, sql_session: AsyncSession, track_row: Tracks,  artists: List[Tuple[str, Optional[str]]]):
         for name, spotify_id in artists:
@@ -102,57 +160,6 @@ class TracksRepository():
                     existing_artist.spotify_id = spotify_id
 
             await sql_session.flush()
-
-    @classmethod
-    async def modify_track(cls, sql_session: AsyncSession, track_id: int, new_track_data: TrackData) -> None:
-        """
-        Modifies a track in the Tracks table with new TrackData
-
-        Args: 
-            sql_session (sqlalchemy.ext.asyncio.AsyncSession): Your open SQLAlchemy Session
-            track_id (int): The ID of the track you want to modify
-            new_track_data (TrackData): The new TrackData of the track you want to modify
-
-        Returns:
-            None
-        """
-        # get the existing track, update its fields with the new data if its there, and flush
-        target_track = await cls.get_track_from_id(sql_session, track_id)
-
-        if target_track:
-            target_track.spotify_id = new_track_data.spotify_id if new_track_data.spotify_id is not None else target_track.spotify_id
-            target_track.filepath = new_track_data.filepath if new_track_data.filepath is not None else target_track.filepath
-            target_track.title = new_track_data.title if new_track_data.title is not None else target_track.title
-            target_track.album = new_track_data.album if new_track_data.album is not None else target_track.album
-            target_track.release_date = new_track_data.release_date if new_track_data.release_date is not None else target_track.release_date
-            target_track.explicit = new_track_data.explicit if new_track_data.explicit is not None else target_track.explicit
-            target_track.comments = new_track_data.comments if new_track_data.comments is not None else target_track.comments
-
-            await sql_session.flush()
-
-    @classmethod
-    async def remove_track(cls, sql_session: AsyncSession, track_id: int) -> bool :
-        """
-        Removes a track from the Tracks table 
-
-        Args: 
-            sql_session (sqlalchemy.ext.asyncio.AsyncSession): Your open SQLAlchemy Session
-            track_id (int): The ID of the track you want to remove
-
-        Returns:
-            bool: Whether or not the track was successfully removed
-        """
-        # get the track, delete it, and flush
-        target_track = await cls.get_track_from_id(sql_session, track_id)
-
-        if target_track:
-            await sql_session.delete(target_track)
-            await sql_session.flush()
-            logger.info(f"Successfully removed the track with id: {track_id}")
-            return True
-        else:
-            logger.info(f"Could not find the track you were trying to remove, track_id = {track_id}")
-            return False
         
     # TODO: We need a better way of checking for existing tracks when spotify_id and filepath is None
     @classmethod
