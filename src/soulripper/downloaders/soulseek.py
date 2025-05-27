@@ -54,9 +54,7 @@ class SoulseekDownloader:
         Returns:
             str|None: the path to the downloaded song
         """
-
         try:
-
             # search slskd using the passed in query
             search_results = await self.search(search_query)
             if search_results is None:
@@ -125,6 +123,7 @@ class SoulseekDownloader:
                         containing_dir_name = os.path.basename(os.path.dirname(download_filepath.replace("\\", "/")))
                         source_path = os.path.join(f"/home/soulripper/assets/downloads/{containing_dir_name}/{download_filename}")
                         final_filepath = os.path.join(f"{output_path}/{download_filename}")
+                        logger.info(f"Soulseek download completed successfully: {final_filepath}")
 
                         if not os.path.exists(source_path):
                             logger.error(f"SLSKD download state is 'Completed, Succeeded' but the file was not found: {source_path}")

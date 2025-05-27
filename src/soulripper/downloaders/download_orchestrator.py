@@ -1,12 +1,11 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List, Tuple, Optional
+from typing import Optional
 import logging
-import datetime
-import os
+import asyncio
 
 from soulripper.database.services import SpotifySynchronizer
-from soulripper.database.repositories import TracksRepository, PlaylistsRepository, ArtistsRepository
-from soulripper.database.schemas import TrackData, PlaylistData
+from soulripper.database.repositories import TracksRepository, PlaylistsRepository
+from soulripper.database.schemas import TrackData
 from soulripper.spotify import SpotifyClient
 from soulripper.downloaders import SoulseekDownloader, download_track_ytdlp
 from soulripper.utils import AppParams
@@ -23,6 +22,8 @@ class DownloadOrchestrator():
         self._spotify_client = spotify_client
         self._sql_session = sql_session
         self._app_params = app_params
+        self._download_semaphore = asyncio.Semaphore(app_params.num_concurrent_downloads)
+        self._db_lock = asyncio.Lock()
 
     async def download_track(self, track_data: Optional[TrackData] = None, search_query: Optional[str] = None, update_db: Optional[bool] = False) -> Optional[str]:
         """
@@ -54,22 +55,24 @@ class DownloadOrchestrator():
         assert search_query is not None
 
         # download the track from soulseek or youtube
-        if self._app_params.youtube_only:
-            download_path = await download_track_ytdlp(search_query, self._app_params.output_path)
-        else:
-            download_path = await self._soulseek_downloader.download_track(search_query, self._app_params.output_path, self._app_params.max_download_retries)
-            if download_path is None:
+        async with self._download_semaphore:
+            if self._app_params.youtube_only:
                 download_path = await download_track_ytdlp(search_query, self._app_params.output_path)
+            else:
+                download_path = await self._soulseek_downloader.download_track(search_query, self._app_params.output_path, self._app_params.max_download_retries)
+                if download_path is None:
+                    download_path = await download_track_ytdlp(search_query, self._app_params.output_path)
 
         # add a new row to the Tracks table with the new filepath if we got one
-        if download_path and update_db:
-            if track_data:
-                track_data.filepath = download_path
-            else:
-                track_data = TrackData(filepath=download_path)
+        async with self._db_lock:
+            if download_path and update_db:
+                if track_data:
+                    track_data.filepath = download_path
+                else:
+                    track_data = TrackData(filepath=download_path)
 
-            await TracksRepository.add_track(self._sql_session, track_data)
-            await self._sql_session.commit()
+                await TracksRepository.add_track(self._sql_session, track_data)
+                await self._sql_session.commit()
 
         return download_path
 
@@ -80,28 +83,42 @@ class DownloadOrchestrator():
         Args:
             playlist_id (int): The id of the playlist to download
         """
+        # get the PlaylistTracks rows
         playlist_track_rows = await PlaylistsRepository.get_playlist_track_rows(self._sql_session, playlist_id)
         if playlist_track_rows is None:
             logger.error(f"Could not retreive playlist tracks from database. Playlist id: {playlist_id}")
             return
         
+        # get the Tracks rows
         playlist_track_data = await PlaylistsRepository.get_track_data(self._sql_session, playlist_id)
         if playlist_track_data is None:
             logger.error(f"Could not retreive track data for tracks in playlist. Playlist id: {playlist_id}")
             return
+        
+        # create a new download_track task for each track in the playlist, then run them all concurrently
+        tasks = [self.download_track(track_data=td, update_db=True) for td in playlist_track_data]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        for track_data in playlist_track_data:
-            track_data.filepath = await self.download_track(track_data=track_data, update_db=True)
+        # log results
+        for result, td in zip(results, playlist_track_data):
+            if isinstance(result, Exception):
+                logger.error(f"Download errored for {td.title}: {str(result)}")
+            elif result is None:
+                logger.info(f"Download failed for {td.title} (result is None)")
+            else:
+                logger.info(f"Successfully downloaded {td.title} to {result}")
 
     async def download_all_playlists(self) -> None:
         """
         Downloads all of the tracks in all of the users playlists
         """
         playlists_data = await PlaylistsRepository.get_all_playlists(self._sql_session)
-        if playlists_data:
-            for playlist_data in playlists_data:
-                if playlist_data.id:
-                    await self.download_playlist(playlist_data.id)
+        if playlists_data is None:
+            logger.warning("No playlists to download in the database")
+            return
+        
+        tasks = [self.download_playlist(playlist_id=playlist.id) for playlist in playlists_data if playlist.id]
+        await asyncio.gather(*tasks, return_exceptions=True)
     
     async def download_liked_songs(self) -> None:
         """

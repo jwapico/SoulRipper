@@ -51,6 +51,8 @@ TODO's (~ roughly in order of importance):
       - unfortunately the slskd-api python wrapper uses requests under the hood, so we need to manually refactor their code to use httpx.AsyncClient for peak concurrency
         - fortunately their code is super easy to read and convert
         - tbh we should just convert the apis we need, plop them in our codebase, and abandon slskd-api completely for peak maintainability
+  - Shared queue over bluetooth (spotify jams but actually good)
+  - keep track and make available to user their listenening history over multiple sessions
   - pass through ssh keys in docker so git works in vscode
   - write an actual README.md
   - better syncing with local music directory
