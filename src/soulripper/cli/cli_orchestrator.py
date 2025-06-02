@@ -89,6 +89,7 @@ class CLIOrchestrator():
         SLSKD_API_KEY = os.getenv("SLSKD_API_KEY")
         if SLSKD_API_KEY:
             self._soulseek_downloader = SoulseekDownloader(SLSKD_API_KEY)
+            assert self._soulseek_downloader is not None
         else:
             raise Exception("You need to set SLSKD_API_KEY in your .env file")
         

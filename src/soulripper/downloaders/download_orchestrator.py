@@ -12,14 +12,11 @@ from soulripper.utils import AppParams
 
 logger = logging.getLogger(__name__)
 
-# TODO: downloads should happen concurrently: https://www.reddit.com/r/learnpython/comments/rlcbid/asyncio_make_2_functions_run_concurrently_without/
-# TODO: download_track should take TrackData and construct a search query - downloading from a search query directly needs to exist but should not be the main method to download a track
-
 class DownloadOrchestrator():
     def __init__(self, soulseek_downloader: SoulseekDownloader, spotify_client: SpotifyClient, spotify_synchronizer: SpotifySynchronizer, sql_session: AsyncSession, app_params: AppParams):
-        # TODO: we may not need all of these member variables
         self._soulseek_downloader = soulseek_downloader
         self._spotify_client = spotify_client
+        self._spotify_synchronizer = spotify_synchronizer
         self._sql_session = sql_session
         self._app_params = app_params
         self._download_semaphore = asyncio.Semaphore(app_params.num_concurrent_downloads)
@@ -117,6 +114,7 @@ class DownloadOrchestrator():
             logger.warning("No playlists to download in the database")
             return
         
+        # create and run asyncio tasks that download each playlist
         tasks = [self.download_playlist(playlist_id=playlist.id) for playlist in playlists_data if playlist.id]
         await asyncio.gather(*tasks, return_exceptions=True)
     
@@ -124,9 +122,11 @@ class DownloadOrchestrator():
         """
         Downloads all the users liked songs
         """
-        liked_playlist_rows = await PlaylistsRepository.search_for_playlist_by_title(self._sql_session, "SPOTIFY_LIKED_SONGS")
+        liked_playlist_row = await PlaylistsRepository.search_for_playlist_by_title(self._sql_session, "SPOTIFY_LIKED_SONGS")
+        if liked_playlist_row is None:
+            liked_playlist_row = await self._spotify_synchronizer.update_db_with_spotify_liked_tracks()
 
-        if liked_playlist_rows:
-            await self.download_playlist(liked_playlist_rows.id)
+        if liked_playlist_row:
+            await self.download_playlist(liked_playlist_row.id)
         else:
-            logger.error("No playlist row was not returned by update_db_with_spotify_liked_tracks")
+            logger.error("No SPOTIFY_LIKED_SONGS playlist was found")
