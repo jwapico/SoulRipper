@@ -6,12 +6,13 @@ from alive_progress import config_handler
 import logging
 import asyncio
 import argparse
+import discogs_client
 import sys
 import os
 
 from soulripper.database import Base, LocalSynchronizer, SpotifySynchronizer
 from soulripper.utils import AppParams
-from soulripper.api_clients import DiscogsClient, SpotifyClient, SpotifyUserData
+from soulripper.api_clients import SpotifyClient, SpotifyUserData
 from soulripper.downloaders import (
     SoulseekDownloader, 
     DownloadOrchestrator,
@@ -96,7 +97,7 @@ class CLIOrchestrator():
         # discogs init
         DISCOGS_TOKEN = os.getenv("DISCOGS_TOKEN")
         if DISCOGS_TOKEN:
-            self._discogs_client = DiscogsClient(DISCOGS_TOKEN)
+            self._discogs_client = discogs_client.Client("soulripper/0.1", user_token=DISCOGS_TOKEN)
         else:
             logger.warning("No Discogs user token found")
         
@@ -105,7 +106,7 @@ class CLIOrchestrator():
             async with self._soulseek_downloader as soulseek_downloader:
                 self._local_synchronizer = LocalSynchronizer(session)
                 self._spotify_synchronizer = SpotifySynchronizer(session, self._spotify_client)
-                self._download_orchestrator = DownloadOrchestrator(self._soulseek_downloader, self._spotify_client, self._spotify_synchronizer, session, self._app_params)
+                self._download_orchestrator = DownloadOrchestrator(self._soulseek_downloader, self._spotify_client, self._spotify_synchronizer, self._discogs_client, session, self._app_params)
 
                 if DROP_DATABASE:
                     input("Warning: This will drop all tables in the database. Press enter to continue...")

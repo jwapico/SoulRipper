@@ -1,22 +1,24 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional
+import discogs_client
 import logging
 import asyncio
 
 from soulripper.database.services import SpotifySynchronizer
 from soulripper.database.repositories import TracksRepository, PlaylistsRepository
 from soulripper.database.schemas import TrackData
-from soulripper.api_clients import SpotifyClient
+from soulripper.api_clients import SpotifyClient, DiscogsClient
 from soulripper.downloaders import SoulseekDownloader, download_track_ytdlp
 from soulripper.utils import AppParams
 
 logger = logging.getLogger(__name__)
 
 class DownloadOrchestrator():
-    def __init__(self, soulseek_downloader: SoulseekDownloader, spotify_client: SpotifyClient, spotify_synchronizer: SpotifySynchronizer, sql_session: AsyncSession, app_params: AppParams):
+    def __init__(self, soulseek_downloader: SoulseekDownloader, spotify_client: SpotifyClient, spotify_synchronizer: SpotifySynchronizer, discogs_client: discogs_client.Client, sql_session: AsyncSession, app_params: AppParams):
         self._soulseek_downloader = soulseek_downloader
         self._spotify_client = spotify_client
         self._spotify_synchronizer = spotify_synchronizer
+        self._discogs_client = discogs_client
         self._sql_session = sql_session
         self._app_params = app_params
         self._download_semaphore = asyncio.Semaphore(app_params.num_concurrent_downloads)
@@ -51,6 +53,11 @@ class DownloadOrchestrator():
             
         # this is mainly for pylance
         assert search_query is not None
+
+        # fetch metadata from discogs api 
+        results = await asyncio.to_thread(self._discogs_client.search, search_query)
+        first_page = results.page(1)
+        # TODO: figure out what we want to store in both the file and database - could just store the releases id for discogs
 
         # download the track from soulseek or youtube
         async with self._download_semaphore:
