@@ -11,7 +11,7 @@ import os
 
 from soulripper.database import Base, LocalSynchronizer, SpotifySynchronizer
 from soulripper.utils import AppParams
-from soulripper.spotify import SpotifyClient, SpotifyUserData
+from soulripper.api_clients import DiscogsClient, SpotifyClient, SpotifyUserData
 from soulripper.downloaders import (
     SoulseekDownloader, 
     DownloadOrchestrator,
@@ -93,6 +93,13 @@ class CLIOrchestrator():
         else:
             raise Exception("You need to set SLSKD_API_KEY in your .env file")
         
+        # discogs init
+        DISCOGS_TOKEN = os.getenv("DISCOGS_TOKEN")
+        if DISCOGS_TOKEN:
+            self._discogs_client = DiscogsClient(DISCOGS_TOKEN)
+        else:
+            logger.warning("No Discogs user token found")
+        
         # create new db session and call different code depending on args
         async with self._db_session_maker() as session:
             async with self._soulseek_downloader as soulseek_downloader:
@@ -102,7 +109,6 @@ class CLIOrchestrator():
 
                 if DROP_DATABASE:
                     input("Warning: This will drop all tables in the database. Press enter to continue...")
-
                     async with self._db_engine.begin() as conn:
                         await conn.run_sync(lambda sync_conn: Base.metadata.drop_all(sync_conn))
                         await conn.run_sync(lambda sync_conn: Base.metadata.create_all(sync_conn))

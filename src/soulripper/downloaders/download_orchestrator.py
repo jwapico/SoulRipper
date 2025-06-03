@@ -6,7 +6,7 @@ import asyncio
 from soulripper.database.services import SpotifySynchronizer
 from soulripper.database.repositories import TracksRepository, PlaylistsRepository
 from soulripper.database.schemas import TrackData
-from soulripper.spotify import SpotifyClient
+from soulripper.api_clients import SpotifyClient
 from soulripper.downloaders import SoulseekDownloader, download_track_ytdlp
 from soulripper.utils import AppParams
 
@@ -22,6 +22,7 @@ class DownloadOrchestrator():
         self._download_semaphore = asyncio.Semaphore(app_params.num_concurrent_downloads)
         self._db_lock = asyncio.Lock()
 
+    # TODO: get accurate metadata for the track and embed it into the file and database row
     async def download_track(self, track_data: Optional[TrackData] = None, search_query: Optional[str] = None, update_db: Optional[bool] = False) -> Optional[str]:
         """
         Downloads a track from SoulSeek or Youtube, optionally updates the database with it.
@@ -43,7 +44,7 @@ class DownloadOrchestrator():
             artists = ', '.join([artist[0] for artist in track_data.artists]) if track_data.artists else ""
             search_query = f"{track_data.title} - {artists}"
 
-            # if an existing track has already been downloaded, return since we dont need to redownload it
+            # if an existing track has already been downloaded, return its filepath since we dont need to redownload it
             existing_track = await TracksRepository.get_existing_track(self._sql_session, track_data)
             if existing_track and existing_track.filepath:
                 return existing_track.filepath

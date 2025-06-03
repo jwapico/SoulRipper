@@ -5,7 +5,7 @@ import datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from soulripper.spotify import SpotifyClient
+from soulripper.api_clients import SpotifyClient
 from ..schemas import TrackData
 from ..models import Playlists
 from ..repositories import PlaylistsRepository
